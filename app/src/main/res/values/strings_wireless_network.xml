@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 无线连接里 WiFi 那一段：车机开热点；退出后恢复车机 WiFi -->
+
+    <!-- 设置页 -->
+    <string name="settings_wireless_restore">退出后恢复车机 WiFi（默认关）</string>
+    <string name="settings_wireless_restore_hint">无线结束、热点关闭后，如果车机 WiFi 因此断开就重新打开。安卓 10 起应用不能自行打开 WiFi，未恢复时首页会提示你去系统开启。</string>
+
+    <!-- 设置页：无线方式 -->
+    <string name="settings_wireless_mode">无线方式</string>
+    <string name="settings_wireless_mode_hotspot">车机开热点</string>
+    <string name="settings_wireless_mode_direct">5 GHz 直连（试验）</string>
+    <string name="settings_wireless_mode_hint">车机开热点：最稳，但车机原 WiFi 会断开。5 GHz 直连：建 WiFi 直连组并优先用 5 GHz，避开蓝牙干扰，原 WiFi 不断开。下次连接生效。</string>
+    <string name="settings_wireless_mode_direct_note">试验功能：需先打开车机 WiFi；建不了 5 GHz 时会退到 2.4 GHz。连不上或卡顿请改回「车机开热点」并附诊断日志。</string>
+
+    <!-- 首页无线卡片 -->
+    <string name="wireless_network_line">无线方式：车机开热点，手机连上时车机原 WiFi 会断开。</string>
+    <string name="wireless_network_line_direct">无线方式：WiFi 直连（试验，优先 5 GHz），需车机 WiFi 开启。</string>
+    <string name="wireless_hint_negotiating_hotspot">认证成功，正在开热点并协商 WiFi…</string>
+    <string name="wireless_hint_sending_hotspot">热点已开，正在把热点信息发给手机…</string>
+    <string name="wireless_hint_waiting_join_hotspot">等待手机连入热点…</string>
+    <string name="wireless_hint_negotiating_direct">认证成功，正在建直连组并协商 WiFi…</string>
+    <string name="wireless_hint_sending_direct">直连组已建好，正在把信息发给手机…</string>
+    <string name="wireless_hint_waiting_join_direct">等待手机加入 WiFi 直连组…</string>
+    <string name="wireless_end_step_hotspot">开热点失败（%1$s）。安卓 8～12 需打开系统定位；车机已开个人热点时请先关闭。</string>
+    <string name="wireless_end_step_join_hotspot">手机未能连上热点（%1$s），可重新开始再试。</string>
+    <string name="wireless_end_step_direct">建 WiFi 直连组失败（%1$s）。确认车机 WiFi 已开；仍失败请改回「车机开热点」。</string>
+    <string name="wireless_end_step_join_direct">手机未能加入直连组（%1$s）。可重试；仍失败请改回「车机开热点」。</string>
+
+    <!-- 退出后恢复车机 WiFi：应用打不开 WiFi 时的提示 -->
+    <string name="wireless_restore_title">车机 WiFi 还关着</string>
+    <string name="wireless_restore_text">开热点导致车机 WiFi 断开，且系统未自行恢复，本系统版本也不允许应用打开 WiFi。请点下方按钮去打开，或到车机设置里手动开启。</string>
+    <string name="wireless_restore_open_panel">打开 WiFi</string>
+    <string name="wireless_restore_open_settings">WiFi 设置</string>
+    <string name="wireless_restore_dismiss">知道了</string>
+    <string name="wireless_restore_unavailable">这台车机打不开 WiFi 页面，请在车机设置里手动打开。</string>
+</resources>

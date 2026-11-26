@@ -1,0 +1,104 @@
+package io.github.gcbond.openhc.core.dmsdp.audio
+
+import io.github.gcbond.openhc.core.common.toHex
+import java.security.MessageDigest
+
+/**
+ * 车机本地用来认出「是哪台手机」的编号：手机设备信息（命令 101）里 deviceId 的 SHA-256 前 8 字节，16 位小写十六进制。
+ * 只在车机本地记结果用，不上线；日志里只露前 6 位。
+ */
+class PhoneRef(val key: String, val name: String?) {
+    /** 日志里用的短编号。 */
+    val shortKey: String get() = key.take(SHORT_KEY)
+
+    override fun toString() = "手机 编号 $shortKey"
+
+    companion object {
+        private const val KEY_BYTES = 8
+        private const val SHORT_KEY = 6
+
+        /** 由手机的 deviceId 算编号。 */
+        fun keyOf(deviceId: String): String =
+            MessageDigest.getInstance("SHA-256").digest(deviceId.toByteArray(Charsets.UTF_8)).copyOf(KEY_BYTES).toHex()
+    }
+}
+
+/**
+ * 这次连接向手机声明的扬声器能力（属性 2102 的内容由它决定），连接里第一次用到时定下、之后不变。
+ *
+ * @property fallback 本来要声明 PCM，这台手机记着在 PCM 下不出声，所以改声明 AAC。
+ */
+class SpeakerPlan(
+    val codec: AudioCodec,
+    val multiBus: Boolean,
+    val phone: PhoneRef?,
+    val fallback: Boolean,
+) {
+    override fun toString(): String {
+        val who = phone?.toString() ?: "还没收到手机的设备信息，认不出是哪台手机"
+        val why = if (fallback) "；这台手机之前在 PCM 下不出声，改声明 AAC" else ""
+        return "向手机声明扬声器：${codec.label}，多声道分流${if (multiBus) "开" else "关"}；$who$why"
+    }
+}
+
+/** 声明 PCM 时，这台手机的表现。应用按手机记下来，决定下次连接要不要退回 AAC。 */
+enum class PcmVerdict(val label: String, val failure: Boolean) {
+    /** 收到够多的、能放的 PCM 包。 */
+    WORKS("PCM 能正常出声", false),
+
+    /** 手机发过焦点请求（想出声），但整个连接里一次数据会话都没开。 */
+    NO_DATA_SESSION("手机想出声，却始终没有开数据会话", true),
+
+    /** 手机发来的 PCM 载荷不像声音（多半两边对编码的理解不一致），被静音不放。 */
+    UNPLAYABLE("手机发来的 PCM 不像声音", true),
+}
+
+/**
+ * 声明 PCM 时判断这台手机能不能出声（纯逻辑）。声明 AAC 时什么都不判。每种结论每个连接最多出一次。
+ *
+ * - [PcmVerdict.WORKS]：收到 [WORKS_PACKETS] 个能放的 PCM 包（约 0.27 秒的声音）。
+ * - [PcmVerdict.UNPLAYABLE]：识别时判定 PCM 载荷不像声音。
+ * - [PcmVerdict.NO_DATA_SESSION]：连接结束时才判——手机发过焦点请求，整个连接里却没触发过一次数据会话，
+ *   且从第一次请求到结束超过 [WINDOW_MILLIS]（太短的连接不下结论）。只看「始终没有」，不在中途下结论：
+ *   手机先发一个短促的系统提示音、过一会儿才开数据会话放歌，不算失败。
+ */
+internal class PcmCheck(private val declaredPcm: Boolean) {
+    private var firstRequestAt = -1L
+    private var triggers = 0
+    private var playablePcm = 0L
+    private var worksSent = false
+    private var unplayableSent = false
+
+    fun onFocusRequest(nowMillis: Long) {
+        if (declaredPcm && firstRequestAt < 0) firstRequestAt = nowMillis
+    }
+
+    fun onTrigger() {
+        triggers++
+    }
+
+    /** 识别出分帧：PCM 载荷被判为不像声音时返回失败。 */
+    fun onFraming(payloadCodec: AudioCodec, playable: Boolean): PcmVerdict? {
+        if (!declaredPcm || unplayableSent || payloadCodec != AudioCodec.PCM || playable) return null
+        unplayableSent = true
+        return PcmVerdict.UNPLAYABLE
+    }
+
+    fun onPacket(codec: AudioCodec, playable: Boolean): PcmVerdict? {
+        if (!declaredPcm || worksSent || codec != AudioCodec.PCM || !playable) return null
+        playablePcm++
+        if (playablePcm < WORKS_PACKETS) return null
+        worksSent = true
+        return PcmVerdict.WORKS
+    }
+
+    fun onClose(nowMillis: Long): PcmVerdict? {
+        if (!declaredPcm || firstRequestAt < 0 || triggers > 0) return null
+        return if (nowMillis - firstRequestAt >= WINDOW_MILLIS) PcmVerdict.NO_DATA_SESSION else null
+    }
+
+    companion object {
+        const val WORKS_PACKETS = 50L
+        const val WINDOW_MILLIS = 10_000L
+    }
+}

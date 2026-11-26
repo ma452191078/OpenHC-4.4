@@ -1,0 +1,141 @@
+package io.github.gcbond.openhc.ui
+
+import android.content.Context
+import io.github.gcbond.openhc.R
+import io.github.gcbond.openhc.connection.ConnectionUiState
+import io.github.gcbond.openhc.connection.EndCause
+import io.github.gcbond.openhc.connection.Notice
+import io.github.gcbond.openhc.connection.Phase
+import io.github.gcbond.openhc.connection.Step
+import io.github.gcbond.openhc.core.auth.AuthFailure
+import io.github.gcbond.openhc.core.hisight.HiSightEndReason
+import io.github.gcbond.openhc.core.session.EndReason
+import io.github.gcbond.openhc.platform.usb.WiredEndReason
+
+// 连接状态 → 界面文字。（4.4 fork：View 体系版，把 Compose 的 stringResource 换成 Context.getString。）
+
+/** 阶段大字。 */
+internal fun phaseTitle(context: Context, phase: Phase): String = context.getString(
+    when (phase) {
+        Phase.IDLE -> R.string.phase_idle
+        Phase.PREPARING -> R.string.phase_preparing
+        Phase.WAITING_FOR_PHONE -> R.string.phase_waiting_for_phone
+        Phase.USB_DEBUGGING_ON -> R.string.phase_usb_debugging
+        Phase.WAITING_USB_PERMISSION -> R.string.phase_usb_permission
+        Phase.CONFIRM_ON_PHONE -> R.string.phase_confirm_on_phone
+        Phase.CONNECTING -> R.string.phase_connecting
+        Phase.PAIRING -> R.string.phase_pairing
+        Phase.PROJECTING -> R.string.phase_projecting
+        Phase.STOPPING -> R.string.phase_stopping
+        Phase.REPLUG_REQUIRED -> R.string.phase_replug
+    },
+)
+
+/** 阶段下面的一行说明。 */
+internal fun phaseHint(context: Context, state: ConnectionUiState): String {
+    state.step?.let { return context.getString(stepHint(it)) }
+    return when (state.phase) {
+        Phase.IDLE -> context.getString(R.string.hint_idle)
+        Phase.PREPARING -> context.getString(R.string.hint_preparing)
+        Phase.WAITING_FOR_PHONE -> context.getString(R.string.hint_waiting_for_phone)
+        Phase.USB_DEBUGGING_ON -> context.getString(R.string.hint_usb_debugging)
+        Phase.WAITING_USB_PERMISSION -> context.getString(R.string.hint_usb_permission_phone)
+        Phase.CONFIRM_ON_PHONE -> context.getString(R.string.hint_phone_switch)
+        Phase.CONNECTING -> context.getString(R.string.hint_connecting)
+        Phase.PAIRING ->
+            context.getString(if (state.pinCode != null) R.string.hint_pairing else R.string.hint_pairing_wait)
+        Phase.PROJECTING -> {
+            val video = state.video
+            when {
+                video == null -> context.getString(R.string.hint_negotiating)
+                !state.firstFrame -> context.getString(R.string.hint_projecting_waiting_frame, video.width, video.height, video.fps)
+                !video.touchInput -> context.getString(R.string.hint_projecting_no_touch, video.width, video.height, video.fps)
+                else -> context.getString(R.string.hint_projecting, video.width, video.height, video.fps)
+            }
+        }
+        Phase.STOPPING -> context.getString(R.string.hint_stopping)
+        Phase.REPLUG_REQUIRED -> context.getString(R.string.hint_replug_unplug)
+    }
+}
+
+private fun stepHint(step: Step): Int = when (step) {
+    Step.USB_PERMISSION_PHONE -> R.string.hint_usb_permission_phone
+    Step.USB_PERMISSION_NETWORK -> R.string.hint_usb_permission_network
+    Step.SENDING_CAR_INFO -> R.string.hint_sending_car_info
+    Step.PHONE_SWITCH -> R.string.hint_phone_switch
+    Step.PHONE_SWITCH_SLOW -> R.string.hint_phone_switch_slow
+    Step.OPENING_NETWORK -> R.string.hint_opening_network
+    Step.WAITING_PHONE_LINK -> R.string.hint_waiting_phone_link
+    Step.HANDSHAKE -> R.string.hint_handshake
+    Step.WAITING_AUTH -> R.string.hint_waiting_auth
+    Step.AUTHENTICATING -> R.string.hint_authenticating
+    Step.DEVICE_SESSION -> R.string.hint_device_session
+    Step.WAITING_PROJECTION -> R.string.hint_waiting_projection
+    Step.NEGOTIATING -> R.string.hint_negotiating
+    Step.REPLUG_UNPLUG -> R.string.hint_replug_unplug
+    Step.REPLUG_WAIT -> R.string.hint_replug_wait
+}
+
+/** 提示卡：缺什么、要用户做什么、上次怎么结束的。 */
+internal fun noticeText(context: Context, notice: Notice): String = when (notice) {
+    Notice.IdentityMissing -> context.getString(R.string.notice_identity_missing)
+    is Notice.IdentityInvalid -> context.getString(R.string.notice_identity_invalid, notice.reason)
+    Notice.VpnConsentRequired -> context.getString(R.string.notice_vpn_required)
+    is Notice.VpnUnavailable -> context.getString(R.string.notice_vpn_unavailable, notice.reason)
+    is Notice.TrustStoreCorrupt -> context.getString(R.string.notice_trust_corrupt, notice.reason)
+    is Notice.TrustStoreUnavailable -> context.getString(R.string.notice_trust_unavailable, notice.reason)
+    is Notice.StartFailed -> context.getString(R.string.notice_start_failed, notice.reason)
+    is Notice.Ended -> context.getString(R.string.notice_ended, endCauseText(context, notice.cause))
+}
+
+private fun endCauseText(context: Context, cause: EndCause): String = when (cause) {
+    EndCause.UserStop -> context.getString(R.string.end_user_stop)
+    is EndCause.Wired -> {
+        val text = context.getString(wiredEndText(cause.reason))
+        cause.detail?.let { context.getString(R.string.end_with_detail, text, it) } ?: text
+    }
+    is EndCause.Session -> sessionEndText(context, cause.reason)
+    is EndCause.Failure -> context.getString(R.string.end_failure, cause.message)
+}
+
+private fun wiredEndText(reason: WiredEndReason): Int = when (reason) {
+    WiredEndReason.STOPPED -> R.string.end_user_stop
+    WiredEndReason.BUSY -> R.string.end_wired_busy
+    WiredEndReason.USB_HOST_UNSUPPORTED -> R.string.end_wired_usb_host_unsupported
+    WiredEndReason.VPN_CONSENT_REQUIRED -> R.string.end_wired_vpn_consent
+    WiredEndReason.VPN_UNAVAILABLE -> R.string.end_wired_vpn_unavailable
+    WiredEndReason.VPN_FAILED -> R.string.end_wired_vpn_failed
+    WiredEndReason.PHONE_NOT_FOUND -> R.string.end_wired_phone_not_found
+    WiredEndReason.USB_PERMISSION_DENIED -> R.string.end_wired_usb_denied
+    WiredEndReason.USB_PERMISSION_TIMEOUT -> R.string.end_wired_usb_timeout
+    WiredEndReason.CAR_INFO_FAILED -> R.string.end_wired_car_info_failed
+    WiredEndReason.PHONE_DID_NOT_SWITCH -> R.string.end_wired_phone_did_not_switch
+    WiredEndReason.USB_NETWORK_UNUSABLE -> R.string.end_wired_usb_network_unusable
+    WiredEndReason.PHONE_UNPLUGGED -> R.string.end_wired_phone_unplugged
+    WiredEndReason.LINK_LOST -> R.string.end_wired_link_lost
+    WiredEndReason.VPN_REVOKED -> R.string.end_wired_vpn_revoked
+    WiredEndReason.TUNNEL_CLOSED -> R.string.end_wired_tunnel_closed
+    WiredEndReason.ERROR -> R.string.end_wired_error
+}
+
+/** 常见原因给一句好懂的话；其余的用会话层自带的说明（已经是中文，不含密钥和设备标识）。 */
+private fun sessionEndText(context: Context, reason: EndReason): String = when (reason) {
+    EndReason.LocalStop -> context.getString(R.string.end_user_stop)
+    EndReason.ControlHandshakeTimeout -> context.getString(R.string.end_session_handshake_timeout)
+    is EndReason.AuthFailed -> when (reason.failure) {
+        is AuthFailure.ConnectionClosed -> context.getString(R.string.end_session_auth_closed)
+        AuthFailure.NotTrusted -> context.getString(R.string.end_session_not_trusted)
+        else -> context.getString(R.string.end_session_auth_failed, reason.failure.toString())
+    }
+    is EndReason.KeepAliveTimeout -> context.getString(R.string.end_session_keepalive)
+    is EndReason.ProjectionEnded -> when (reason.reason) {
+        HiSightEndReason.LOCAL_SHUTDOWN -> context.getString(R.string.end_user_stop)
+        HiSightEndReason.PEER_TEARDOWN -> context.getString(R.string.end_projection_teardown)
+        HiSightEndReason.CONTROL_CLOSED -> context.getString(R.string.end_projection_control_closed)
+        HiSightEndReason.VIDEO_CLOSED -> context.getString(R.string.end_projection_video_closed)
+        HiSightEndReason.REMOTE_CONTROL_CLOSED -> context.getString(R.string.end_projection_remote_closed)
+    }
+    is EndReason.ProtocolError, is EndReason.PeerClosed, is EndReason.NetworkError,
+    is EndReason.VideoSinkFailed, is EndReason.InternalError,
+    -> reason.toString()
+}

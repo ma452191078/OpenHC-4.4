@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 设置页：清晰度（声明给手机的目标码率） -->
+    <string name="settings_clarity">清晰度</string>
+    <string name="settings_clarity_standard">标准（默认）：手机按自己的默认码率</string>
+    <string name="settings_clarity_high">高：%1$d Mbps</string>
+    <string name="settings_clarity_highest">最高：%1$d Mbps</string>
+    <string name="settings_clarity_hint">越高越清晰，但手机更耗电、易发热（发热会降帧），无线也更易卡。下次连接生效。</string>
+</resources>

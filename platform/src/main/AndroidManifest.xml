@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+            有线连接用的 VpnService：只为了得到一块地址由自己定的 TUN 网卡，只路由手机所在网段、只对本应用生效。
+            BIND_VPN_SERVICE 只有系统能持有，保证只有系统能绑定它的 VPN 接口；不导出，应用内用显式 Intent 绑定。
+            不支持「始终开启的 VPN」：没有有线会话时它不该被系统拉起。
+        -->
+        <service
+            android:name=".net.WiredVpnService"
+            android:exported="false"
+            android:permission="android.permission.BIND_VPN_SERVICE">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="false" />
+        </service>
+
+        <!--
+            4.4 fork：旧媒体键路径（API 21 以下没有 android.media.session.MediaSession）。
+            系统把方向盘/中控的媒体键以 MEDIA_BUTTON 广播发给已注册的应用；
+            MediaKeySession 在 21 以下注册它，按键经 MediaButtonReceiver 转给 MediaKeySession.dispatchLegacyMediaKey。
+        -->
+        <receiver
+            android:name=".media.MediaButtonReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

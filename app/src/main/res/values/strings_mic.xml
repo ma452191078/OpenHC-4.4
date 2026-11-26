@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 设置页「声音（实验）」里的车机麦克风 -->
+    <string name="settings_mic_enabled">车机麦克风</string>
+    <string name="settings_mic_hint">通话、语音助手时改用车辆麦克风（实验）。需要录音权限，否则用手机麦克风。下次连接生效。</string>
+    <string name="settings_mic_permission_granted">录音权限：已允许</string>
+    <string name="settings_mic_permission_missing">录音权限：未授予（点这里申请；被拒两次后需到系统设置中开启「麦克风」）</string>
+    <string name="settings_mic_profile">麦克风能力声明（调试）</string>
+    <string name="settings_mic_profile_pcm">声明 16kHz 单声道 PCM（默认：手机会要 PCM）</string>
+    <string name="settings_mic_profile_none">不声明能力（手机按默认要求，可能用 AAC）</string>
+    <string name="mic_permission_denied">没有录音权限，本次使用手机麦克风。可在「声音（实验）」中重新申请。</string>
+</resources>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 设置页：声音（实验） -->
+    <string name="settings_audio">声音（实验）</string>
+    <string name="settings_audio_enabled">把手机的声音放到车机上</string>
+    <string name="settings_audio_hint">打开后手机的音乐、导航播报等声音交给车机，导航与音乐分声道输出；车机其他应用出声时，手机会暂停或压低。实验功能：车机放不出声时手机也不会响，关掉即恢复手机出声。下次连接生效。</string>
+    <string name="settings_audio_delay">声音延后</string>
+    <string name="settings_audio_delay_min">最低</string>
+    <string name="settings_audio_delay_plus">+%1$d ms</string>
+    <string name="settings_audio_delay_hint">默认最低缓冲。声音早于画面时往上调，声音整体后移。下次连接生效。</string>
+    <string name="settings_audio_navigation_stream">导航声道</string>
+    <string name="settings_audio_navigation_stream_hint">默认「自动」。导航与音乐音量联动时，选车机导航声道号（同 DiPlay），点「试听」确认。</string>
+    <string name="settings_audio_media_stream">音乐声道</string>
+    <string name="settings_audio_media_stream_hint">一般留「自动」；指定声道号后音乐不走低延迟输出。</string>
+    <string name="settings_audio_stream_auto">自动</string>
+    <string name="settings_audio_preview">试听</string>
+    <string name="settings_audio_preview_playing">试听中</string>
+    <string name="settings_audio_preview_auto">已按「自动」放了一段提示音。</string>
+    <string name="settings_audio_preview_stream">已用 %1$d 号放了一段提示音。</string>
+    <string name="settings_audio_preview_rejected">车机不认 %1$d 号，按「自动」放的。</string>
+    <string name="settings_audio_preview_failed">试听失败：%1$s</string>
+    <string name="settings_audio_debug_title">调试开关（实验用）</string>
+    <string name="settings_audio_debug_hint">仅用于真机对比声音的编码、传输和分路，平时保持默认（PCM、TCP、多声道分流开）。</string>
+    <string name="settings_audio_codec">音频编码</string>
+    <string name="settings_audio_codec_pcm">PCM（不压缩，默认：延迟更低；不出声时自动改用 AAC 并记录）</string>
+    <string name="settings_audio_codec_aac">AAC（压缩：所有手机都用 AAC）</string>
+    <string name="settings_audio_fallback_title">已自动改用 AAC 的手机</string>
+    <string name="settings_audio_fallback_none">没有</string>
+    <string name="settings_audio_fallback_help">PCM 下不出声的手机会记在这里，下次连接改用 AAC；曾正常出声的需连续两次才记录。点「恢复 PCM」后下次重试。</string>
+    <string name="settings_audio_fallback_item">%1$s（编号 %2$s）：%3$s，%4$s 记下</string>
+    <string name="settings_audio_fallback_unnamed">没报名字的手机</string>
+    <string name="settings_audio_fallback_reset">恢复 PCM</string>
+    <string name="settings_audio_multi_bus">多声道分流（默认开）</string>
+    <string name="settings_audio_multi_bus_hint">向手机声明多音频总线：导航播报走车机导航声道，音乐走媒体声道。关闭则全部混在一起、都走媒体音量。</string>
+    <string name="settings_audio_transport">传输方式</string>
+    <string name="settings_audio_transport_tcp">TCP（默认）</string>
+    <string name="settings_audio_low_latency">低延迟输出（默认开）</string>
+    <string name="settings_audio_low_latency_hint">安卓 8.0 起使用低延迟输出路径；关闭则走普通媒体输出。更低版本无此功能。</string>
+    <string name="settings_audio_transport_udp">UDP（仅观察手机反应：手机侧建不起发送端，车机也不收 UDP 包）</string>
+</resources>

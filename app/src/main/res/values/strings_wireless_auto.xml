@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 无线自动回连（配对过的手机靠近时自己连上，不用再扫码） -->
+    <string name="wireless_phase_auto">等已配对的手机回连</string>
+    <string name="wireless_hint_auto">配对过的手机开着蓝牙靠近会自动连接；新手机请扫码。</string>
+    <string name="wireless_auto_notification_text">正在等已配对的手机回连</string>
+
+    <!-- 这次连接里的 BLE 广播 -->
+    <string name="wireless_beacon_starting">BLE 广播：正在打开…</string>
+    <string name="wireless_beacon_advertising">BLE 广播：在发（第 %1$d 轮）</string>
+    <string name="wireless_beacon_retrying">BLE 广播没发出去（%1$s），%2$d 秒后再试。</string>
+    <string name="wireless_beacon_failed">BLE 广播失败（%1$s）：只能扫码连接。</string>
+
+    <!-- 只用数据线连接 -->
+    <string name="wireless_notice_wired_only">「只用数据线连接」已开启。要用无线，请在「设置」里关闭。</string>
+    <string name="wireless_action_open_settings">去设置</string>
+
+    <!-- 自动回连没在等的原因（无线页空闲时显示） -->
+    <string name="wireless_auto_hold_wired_only">「只用数据线连接」已开启，不自动连接手机。</string>
+    <string name="wireless_auto_hold_paused">已停止；手机蓝牙重新连上时会自动连接，现在连接请扫码。</string>
+    <string name="wireless_auto_hold_wired">有线连接进行中。</string>
+    <string name="wireless_auto_hold_hotspot_unsupported">安卓 8.0 以下没有本地热点，无线不可用（有线照常）。</string>
+    <string name="wireless_auto_hold_identity">安装包不完整，无线不可用。</string>
+    <string name="wireless_auto_hold_no_phone">还没有配对过的手机，请扫码配对一次。</string>
+    <string name="wireless_auto_hold_bt_off">车机蓝牙未开，打开后会自动连接。</string>
+    <string name="wireless_auto_hold_permissions">缺权限：点「开始无线连接」授权。</string>
+    <string name="wireless_auto_hold_unsupported">不支持 BLE 广播：只能扫码连接。</string>
+    <string name="wireless_auto_hold_address">读不到车机蓝牙地址，请在「设置」里填写。</string>
+    <string name="wireless_auto_hold_foreground">后台无法开始连接，请回到本应用。</string>
+    <string name="wireless_auto_hold_failed">没能开始连接（原因见日志）。</string>
+    <string name="wireless_auto_hold_ready">手机蓝牙连上或打开 OpenHC 时自动连接。</string>
+    <string name="wireless_auto_hold_no_known">还没有无线连接过的手机，请扫码连接一次。</string>
+    <string name="wireless_auto_hold_overlay">自动连接需要悬浮窗权限，请在「设置 → 启动」里开启。</string>
+    <string name="wireless_auto_hold_ui_not_shown">手机蓝牙已连上，但没能自动打开 OpenHC，本次未连接。</string>
+
+    <!-- 设置页 -->
+    <string name="settings_wireless_wired_only">只用数据线连接（默认关）</string>
+    <string name="settings_wireless_wired_only_hint">关闭无线投屏，只能插线：不自动连接手机、不开热点，也不影响车机连 WiFi。已连接的无线投屏可用到断开为止。</string>
+    <string name="settings_wireless_wired_only_note">「只用数据线连接」开着时，「自动连接手机」不起作用。</string>
+    <string name="settings_wireless_connect_on_bt">自动连接手机（默认开）</string>
+    <string name="settings_wireless_connect_on_bt_hint">手机蓝牙连上车机或打开 OpenHC 时，自动连接无线连接过的手机，无需扫码。需要悬浮窗权限；比亚迪车机还需在「选择禁止后台启动项」中放行 OpenHC。新手机请先扫码连接一次。</string>
+    <string name="settings_wireless_debug">无线调试（BLE 广播，下次开始等待时生效）</string>
+    <string name="settings_wireless_republish">每隔多久换序列号重新发布</string>
+    <string name="settings_wireless_republish_off">不重发</string>
+    <string name="settings_wireless_republish_seconds">%1$d 秒</string>
+    <string name="settings_wireless_republish_minutes">%1$d 分钟</string>
+    <string name="settings_wireless_republish_hint">换序列号会让手机当成新的广播重新处理，代价是附近未配对的手机每次都会弹「发现车机」。默认 120 秒。</string>
+    <string name="settings_wireless_random">广播里声明「车机用随机地址广播」（默认关）</string>
+    <string name="settings_wireless_random_hint">仅在确认车机广播地址不是蓝牙地址时尝试（可用 BLE 扫描工具对比）。</string>
+    <string name="settings_wireless_gatt">同时挂 GATT 服务（默认开）</string>
+    <string name="settings_wireless_gatt_hint">部分手机系统会连上来取车机地址；日志 OpenHC-Wireless 会记录。</string>
+</resources>

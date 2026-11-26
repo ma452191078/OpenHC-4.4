@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    插线拉起：华为（厂商号 0x12D1 = 4817）、荣耀（0x339B = 13211）手机。厂商号、产品号写十进制，老系统不一定认十六进制。
+    产品号只列有线投屏认得的几种状态：普通状态 0x107D/0x107E/0x107F（4221/4222/4223，切成 USB 网卡后不变），
+    开着 USB 调试时的 0x5000（20480，拉起后提示用户关掉）。不写产品号的话，车机里同厂商的其他 USB 设备
+    （例如上网模块）也会把应用拉起来。
+-->
+<resources>
+    <usb-device vendor-id="4817" product-id="4221" />
+    <usb-device vendor-id="4817" product-id="4222" />
+    <usb-device vendor-id="4817" product-id="4223" />
+    <usb-device vendor-id="4817" product-id="20480" />
+    <usb-device vendor-id="13211" product-id="4221" />
+    <usb-device vendor-id="13211" product-id="4222" />
+    <usb-device vendor-id="13211" product-id="4223" />
+    <usb-device vendor-id="13211" product-id="20480" />
+</resources>

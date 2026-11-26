@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">OpenHC</string>
+    <string name="home_tagline">开源的车机端华为手机投屏接收器，与华为、比亚迪等公司无关。</string>
+    <string name="home_version">版本 %1$s</string>
+
+    <!-- 操作 -->
+    <string name="action_start">开始</string>
+    <string name="action_stop">停止</string>
+    <string name="action_settings">设置</string>
+    <string name="action_back">返回</string>
+    <!-- 设置项标题旁的「?」：点开看说明（读屏用） -->
+    <string name="row_help">说明</string>
+    <string name="row_help_shown">已展开</string>
+    <string name="row_help_hidden">已收起</string>
+    <string name="action_show_projection">回到投屏画面</string>
+    <string name="action_retry_now">立即重试</string>
+    <string name="action_grant_vpn">去授权</string>
+    <string name="action_reset_trust">清除配对记录并重试</string>
+    <string name="action_save">保存</string>
+    <string name="action_clear">清除</string>
+
+    <!-- 连接阶段 -->
+    <string name="phase_idle">未开始</string>
+    <string name="phase_preparing">正在准备</string>
+    <string name="phase_waiting_for_phone">等待插线</string>
+    <string name="phase_usb_debugging">需要关闭 USB 调试</string>
+    <string name="phase_usb_permission">等待 USB 授权</string>
+    <string name="phase_confirm_on_phone">请在手机上点「连接」</string>
+    <string name="phase_connecting">正在连接</string>
+    <string name="phase_pairing">配对中</string>
+    <string name="phase_projecting">投屏中</string>
+    <string name="phase_stopping">正在断开</string>
+    <string name="phase_replug">请拔线后重插</string>
+
+    <!-- 阶段说明 -->
+    <string name="hint_idle">点「开始」，再插上华为手机。</string>
+    <string name="hint_preparing">正在准备…</string>
+    <string name="hint_waiting_for_phone">插上华为手机，保持解锁并关闭 USB 调试。</string>
+    <string name="hint_usb_debugging">请在手机「开发人员选项」里关闭「USB 调试」，关闭后自动继续。</string>
+    <string name="hint_usb_permission_phone">请在车机弹框里允许 OpenHC 访问手机。</string>
+    <string name="hint_usb_permission_network">请再允许一次 USB 访问。</string>
+    <string name="hint_sending_car_info">正在通知手机切换…</string>
+    <string name="hint_phone_switch">等待手机响应；首次连接请在手机上点「连接」。</string>
+    <string name="hint_phone_switch_slow">有确认框请点「连接」；没有的话请拔线，等 5 秒以上再插回。</string>
+    <string name="hint_opening_network">正在建立 USB 网络…</string>
+    <string name="hint_waiting_phone_link">USB 网络已通，等待手机连接…</string>
+    <string name="hint_connecting">正在连接手机…</string>
+    <string name="hint_handshake">手机已连上，正在握手…</string>
+    <string name="hint_waiting_auth">等待手机发起认证…</string>
+    <string name="hint_authenticating">正在认证（免码回连）…</string>
+    <string name="hint_device_session">认证成功，正在建立设备会话…</string>
+    <string name="hint_waiting_projection">会话已建立，等待手机开始投屏…</string>
+    <string name="hint_negotiating">正在协商投屏参数…</string>
+    <string name="hint_pairing_wait">首次连接需要配对，正在生成连接码…</string>
+    <string name="hint_pairing">首次连接：请在手机上输入下面的连接码。</string>
+    <string name="hint_projecting">%1$d×%2$d · %3$d fps</string>
+    <string name="hint_projecting_waiting_frame">%1$d×%2$d · %3$d fps，等待第一帧画面…</string>
+    <string name="hint_projecting_no_touch">%1$d×%2$d · %3$d fps。手机未开放触摸，只能看画面。</string>
+    <string name="hint_stopping">正在断开连接，请稍候…</string>
+    <string name="hint_replug_unplug">这次插入已失效，请拔线，等 5 秒以上再插回。</string>
+    <string name="hint_replug_wait">已拔下，等几秒后插回即可自动连接。</string>
+
+    <!-- 提示与错误 -->
+    <string name="notice_identity_missing">安装包不完整，请重新安装。</string>
+    <string name="notice_identity_invalid">安装包不完整（%1$s），请重新安装。</string>
+    <string name="notice_vpn_required">首次使用有线连接时，请允许 VPN 授权。它只用于建立手机连接，不会更改车机的网络访问。</string>
+    <string name="notice_vpn_unavailable">系统未能提供有线连接所需的 VPN 功能。原因：%1$s</string>
+    <string name="notice_trust_corrupt">配对记录损坏（%1$s），清除后已配对手机需重新输入连接码。</string>
+    <string name="notice_trust_unavailable">读不了配对记录：%1$s</string>
+    <string name="notice_start_failed">无法开始：%1$s</string>
+    <string name="notice_ended">上次连接结束：%1$s</string>
+    <string name="vpn_dialog_missing">系统里没有 VPN 授权页</string>
+
+    <!-- 结束原因 -->
+    <string name="end_user_stop">已停止</string>
+    <string name="end_with_detail">%1$s（%2$s）</string>
+    <string name="end_failure">出错（%1$s）</string>
+    <string name="end_wired_busy">上次有线连接还没结束，请稍后重试或重启应用</string>
+    <string name="end_wired_usb_host_unsupported">车机不支持 USB 主机模式，用不了有线连接</string>
+    <string name="end_wired_vpn_consent">没有 VPN 授权</string>
+    <string name="end_wired_vpn_unavailable">系统不允许使用 VPN</string>
+    <string name="end_wired_vpn_failed">建立虚拟网卡失败</string>
+    <string name="end_wired_phone_not_found">没有等到手机插入</string>
+    <string name="end_wired_usb_denied">USB 访问被拒绝</string>
+    <string name="end_wired_usb_timeout">等待 USB 授权超时</string>
+    <string name="end_wired_car_info_failed">通知手机切换失败</string>
+    <string name="end_wired_phone_did_not_switch">手机没有切换过来（可能没点「连接」）</string>
+    <string name="end_wired_usb_network_unusable">手机的 USB 网络用不了</string>
+    <string name="end_wired_phone_unplugged">手机断开了（拔线或手机结束连接）</string>
+    <string name="end_wired_link_lost">USB 连接出错</string>
+    <string name="end_wired_vpn_revoked">VPN 授权被撤销（被其他 VPN 顶替或在系统中断开）</string>
+    <string name="end_wired_tunnel_closed">虚拟网卡被系统关闭</string>
+    <string name="end_wired_error">意外错误</string>
+    <string name="end_session_handshake_timeout">手机没有按时完成握手</string>
+    <string name="end_session_auth_closed">配对未完成：手机断开了认证（取消或连接码错误）</string>
+    <string name="end_session_not_trusted">没有这台手机的配对记录，请在手机上删除车机后重新配对。</string>
+    <string name="end_session_auth_failed">认证失败（%1$s）</string>
+    <string name="end_session_keepalive">手机没有响应（保活超时）</string>
+    <string name="end_projection_teardown">手机结束了投屏</string>
+    <string name="end_projection_control_closed">手机关闭了投屏控制连接</string>
+    <string name="end_projection_video_closed">视频连接结束</string>
+    <string name="end_projection_remote_closed">触摸回传连接断开</string>
+
+    <!-- 投屏页 -->
+    <string name="projection_waiting_frame">正在等待手机画面…</string>
+    <string name="projection_decoder_problem">解码器不可用：%1$s</string>
+
+    <!-- 设置 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_apply_hint">修改在下次连接时生效。</string>
+    <string name="settings_fps">画面流畅度（帧率）</string>
+    <string name="settings_fps_auto">自动：按屏幕刷新率（%1$d fps）</string>
+    <string name="settings_fps_fixed">%1$d 帧</string>
+    <string name="settings_fps_hint">帧率高于屏幕刷新率时，画面会偶尔跳一下。</string>
+    <string name="settings_bt">车机蓝牙地址</string>
+    <string name="settings_bt_current_property">当前使用：%1$s（读自车机系统）</string>
+    <string name="settings_bt_current_manual">当前使用：%1$s（手动填写）</string>
+    <string name="settings_bt_current_unavailable">当前：未取到，按 02:00:00:00:00:00 处理（不影响有线）</string>
+    <string name="settings_bt_manual_label">手动填写（格式 AA:BB:CC:DD:EE:FF）</string>
+    <string name="settings_bt_invalid">格式不对，或者是占位地址</string>
+    <string name="settings_bt_hint">填写有效地址时优先使用；清空则读系统地址。地址变化后需重新配对。</string>
+
+    <!-- 通知 -->
+    <string name="notification_channel_name">投屏连接</string>
+    <string name="notification_projecting">OpenHC 正在投屏</string>
+    <string name="notification_projecting_text">点按回到 OpenHC</string>
+    <string name="notification_connecting">OpenHC 正在连接手机</string>
+    <string name="notification_connecting_text">请按车机屏幕上的提示操作</string>
+    <string name="notification_pairing_text">请在手机上输入车机屏幕上的连接码</string>
+    <string name="notification_waiting">OpenHC 正在等待手机</string>
+    <string name="notification_waiting_text">请用数据线连接华为手机</string>
+    <string name="notification_replug_text">请拔掉数据线，等 5 秒以上再插回</string>
+    <string name="notification_stopping_text">正在断开连接</string>
+</resources>

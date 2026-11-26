@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="OpenHC 车机投屏界面原型：无线/有线连接、扫码配对、投屏与设置的深色座舱风格高保真演示。">
+<title>OpenHC · 新界面原型 · Cockpit Link</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · checked: 2026-11-24 · genre: atmospheric (inferred) · scope: app · shape: app screen
+ * built: the project · redesign: polish · theme: brand (kept cyan-on-graphite)
+ * floor: fixed 10a,19,33,34,48,54,62,63,67 · reflex: 12 fixed; 24b waived (polish keeps existing spacing); 64 waived for telemetry figures (mono is the material)
+ * warn: 29 flattened, 40 raised, 41 fixed, 69 waived (one clock visible per screen), F6 fixed, F23 fixed, F24 fixed
+ * critique: reads as a real car HMI, not a generated dashboard; accent marks action/selection/state only
+ */
+:root{
+  --bg:#070b12;
+  --bg-2:#0a1019;
+  --panel:#0e1520;
+  --panel-2:#121b28;
+  --line:rgba(140,175,215,.14);
+  --line-strong:rgba(140,175,215,.26);
+  --text:#e9f1f9;
+  --muted:#8b99ac;
+  --dim:#6b7a8f;
+  --acc:#37e6dc;          /* 信号青 */
+  --acc-ink:#04211f;
+  --acc-soft:rgba(55,230,220,.12);
+  --blue:#4da3ff;
+  --warn:#ffb454;
+  --warn-soft:rgba(255,180,84,.12);
+  --danger:#ff6262;
+  --ok:#3ddc97;
+  --r-lg:16px;
+  --r-md:12px;
+  --r-sm:8px;
+  --font-display:"Rajdhani","Noto Sans SC",sans-serif;
+  --font-body:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  --font-mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;
+  --surface-1:rgba(255,255,255,.02); --surface-2:rgba(255,255,255,.04); --surface-3:rgba(255,255,255,.03);
+  --edge-hi:rgba(255,255,255,.05); --edge-hi2:rgba(255,255,255,.06); --btn-edge:rgba(255,255,255,.35);
+  --acc-faint:rgba(55,230,220,.05); --acc-faint2:rgba(55,230,220,.03); --acc-glow:rgba(55,230,220,.07);
+  --acc-halo:rgba(55,230,220,.13); --acc-soft2:rgba(55,230,220,.10); --acc-soft3:rgba(55,230,220,.2); --acc-line:rgba(55,230,220,.35);
+  --acc-line2:rgba(55,230,220,.4); --acc-line3:rgba(55,230,220,.45); --acc-line4:rgba(55,230,220,.5);
+  --acc-line5:rgba(55,230,220,.55); --acc-line6:rgba(55,230,220,.6); --acc-shadow:rgba(55,230,220,.28);
+  --acc-shadow2:rgba(55,230,220,.3); --acc-pulse1:rgba(55,230,220,.15); --acc-pulse2:rgba(55,230,220,.18);
+  --acc-pulse3:rgba(55,230,220,.06); --acc-deep:#22c8d8; --acc-deep2:#1fb6c9;
+  --grid-line:rgba(140,175,215,.045); --bar-bg:#0a1019; --hud-bg:#0e1520; --hud-scrim:rgba(5,8,13,.85);
+  --foot-bg:rgba(7,11,18,.6); --nav-bg:rgba(7,11,18,.4); --carbar-bg:#05080d; --inset:#0a111b;
+  --scroll:#1d2938; --switch-off:#1b2634; --switch-knob:#7d8ca0; --qr-paper:#eef4fa; --qr-ink:#0b1220;
+  --bezel-hi:#141c29; --bezel-lo:#0a0f17; --shadow-1:rgba(0,0,0,.5); --shadow-2:rgba(0,0,0,.4);
+  --shadow-3:rgba(0,0,0,.35); --shadow-4:rgba(0,0,0,.6); --danger-line:rgba(255,98,98,.45);
+  --danger-line2:rgba(255,98,98,.5); --danger-soft:rgba(255,98,98,.08); --danger-soft2:rgba(255,98,98,.16);
+  --danger-soft3:rgba(255,98,98,.15); --warn-line:rgba(255,180,84,.4); --warn-line2:rgba(255,180,84,.45);
+  --warn-line3:rgba(255,180,84,.5); --warn-soft2:rgba(255,180,84,.18); --ok-line:rgba(61,220,151,.4);
+  --ok-soft:rgba(61,220,151,.08); --toast-bg:rgba(14,21,32,.95); --text-faint:rgba(233,241,249,.4);
+  --wait-bg:rgba(7,11,18,.92);
+  --map-bg1:#0c1320; --map-bg2:#0a0f18; --map-street:#16202f; --map-street2:#1d2a3d; --map-green:#0f1d22;
+  --map-water:#0e1a26; --map-poi:#5c6f88; --map-card-line:#22304a; --map-ink:#eafffd; --map-album2:#2b5fd9;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow-x:clip}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-body);
+  overflow-y:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+button{font-family:inherit;color:inherit;background:none;border:none;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+::selection{background:var(--acc-soft)}
+
+/* ---------- 原型外壳：工具条 + 车机屏幕 ---------- */
+#stage{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+  background:
+    radial-gradient(1200px 500px at 50% -10%,var(--acc-faint),transparent 60%),
+    var(--bg);
+}
+#toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;max-width:1280px;padding:0 16px}
+#toolbar .tb-label{font-family:var(--font-body);font-size:12px;letter-spacing:normal;color:var(--dim);text-transform:none;margin-right:4px}
+.tb-chip{
+  font-size:12px;color:var(--muted);padding:6px 12px;border-radius:999px;
+  border:1px solid var(--line);background:var(--surface-1);
+  transition:color .18s ease,border-color .18s ease,background-color .18s ease;white-space:nowrap;
+}
+.tb-chip:hover{color:var(--text);border-color:var(--line-strong)}
+.tb-chip.on{color:var(--acc-ink);background:var(--acc);border-color:var(--acc);font-weight:700}
+.tb-chip.demo{color:var(--acc);border-color:var(--acc-line2)}
+.tb-sep{width:1px;height:18px;background:var(--line);margin:0 4px}
+#bezel{
+  position:relative;border-radius:22px;padding:10px;
+  background:linear-gradient(180deg,var(--bezel-hi),var(--bezel-lo));
+  box-shadow:0 30px 80px var(--shadow-4),0 0 0 1px var(--shadow-2),inset 0 1px 0 var(--edge-hi);
+}
+#device{
+  position:relative;width:1280px;height:720px;border-radius:14px;overflow:hidden;
+  background:var(--bg-2);
+  transform-origin:center center;
+}
+/* 屏幕氛围：细网格 + 顶部微光 + 噪点 */
+#device::before{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(900px 340px at 78% -8%,var(--acc-glow),transparent 65%),
+    linear-gradient(var(--grid-line) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid-line) 1px,transparent 1px);
+  background-size:auto,44px 44px,44px 44px;
+}
+#device::after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:60;opacity:.05;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- 通用屏幕 ---------- */
+.screen{position:absolute;inset:0;z-index:1;display:none;flex-direction:column}
+.screen.active{display:flex;animation:screenIn .38s cubic-bezier(.22,.8,.3,1)}
+@keyframes screenIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ---------- 顶栏 ---------- */
+.topbar{
+  position:relative;z-index:2;height:64px;flex:none;
+  display:flex;align-items:center;gap:14px;padding:0 24px;
+  border-bottom:1px solid var(--line);
+  background:var(--bar-bg);
+}
+.brand{display:flex;align-items:center;gap:11px}
+.brand-mark{
+  width:34px;height:34px;border-radius:9px;flex:none;
+  background:var(--acc);
+  display:grid;place-items:center;color:var(--acc-ink);
+}
+.brand-mark svg{width:19px;height:19px}
+.brand-name{font-family:var(--font-display);font-weight:700;font-size:21px;letter-spacing:.04em;line-height:1}
+.brand-tag{font-size:11px;color:var(--dim);letter-spacing:normal;margin-top:3px}
+.topbar .spacer{flex:1}
+.status-chip{
+  display:flex;align-items:center;gap:7px;font-size:12px;color:var(--muted);
+  padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--surface-1);
+}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+.dot.acc{background:var(--acc)}
+.dot.warn{background:var(--warn)}
+.dot.off{background:var(--dim)}
+.icon-btn{
+  width:42px;height:42px;border-radius:11px;display:grid;place-items:center;
+  border:1px solid var(--line);background:var(--surface-1);color:var(--muted);
+  transition:color .18s ease,border-color .18s ease,background-color .18s ease;
+}
+.icon-btn:hover{color:var(--acc);border-color:var(--acc-line3);background:var(--acc-soft)}
+.icon-btn svg{width:19px;height:19px}
+.back-btn{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);padding:9px 14px;border-radius:11px;border:1px solid var(--line);transition:color .18s ease,border-color .18s ease}
+.back-btn:hover{color:var(--text);border-color:var(--line-strong)}
+.back-btn svg{width:16px;height:16px}
+.screen-title{font-size:17px;font-weight:700;letter-spacing:.02em}
+
+/* ---------- 首页 ---------- */
+.home-body{position:relative;z-index:1;flex:1;display:grid;grid-template-columns:300px 1fr;gap:20px;padding:22px 24px;min-height:0}
+.rail{display:flex;flex-direction:column;gap:12px;min-height:0}
+.rail-label{font-family:var(--font-body);font-size:12px;letter-spacing:normal;text-transform:none;color:var(--muted);padding:2px 2px 0}
+.mode-card{
+  position:relative;text-align:left;border-radius:var(--r-lg);padding:16px 18px;
+  border:1px solid var(--line);background:var(--panel);
+  display:flex;align-items:center;gap:14px;min-height:92px;color:var(--text);
+  transition:border-color .2s ease,background-color .2s ease;overflow:hidden;
+}
+.mode-card:hover{border-color:var(--line-strong)}
+.mode-card .m-icon{
+  width:46px;height:46px;border-radius:12px;flex:none;display:grid;place-items:center;
+  background:var(--surface-2);color:var(--muted);transition:background-color .2s ease,color .2s ease;
+}
+.mode-card .m-icon svg{width:23px;height:23px}
+.mode-card .m-title{font-size:17px;font-weight:700}
+.mode-card .m-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.mode-card .m-check{margin-left:auto;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--line-strong);display:grid;place-items:center;color:transparent;flex:none;transition:border-color .2s ease,background-color .2s ease,color .2s ease}
+.mode-card.sel{border-color:var(--acc-line5);background:var(--acc-soft2),var(--panel)}
+.mode-card.sel::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:3px;background:var(--acc)}
+.mode-card.sel .m-icon{background:var(--acc-soft);color:var(--acc)}
+.mode-card.sel .m-sub{color:var(--acc)}
+.mode-card.sel .m-check{border-color:var(--acc);background:var(--acc);color:var(--acc-ink)}
+.mode-card .m-check svg{width:12px;height:12px}
+.pref-card{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);color:var(--text);padding:15px 18px;margin-top:auto}
+.pref-row{display:flex;align-items:center;gap:12px}
+.pref-row .p-title{font-size:14px;font-weight:500}
+.pref-row .p-sub{font-size:11.5px;color:var(--dim);margin-top:3px;line-height:1.5}
+
+/* 开关 */
+.switch{position:relative;width:52px;height:30px;flex:none;border-radius:999px;background:var(--switch-off);border:1px solid var(--line-strong);transition:background-color .22s ease,border-color .22s ease}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:var(--switch-knob);transform:translateX(0);transition:transform .22s cubic-bezier(.2,.8,.3,1),background-color .22s ease}
+.switch[aria-pressed="true"]{background:var(--acc);border-color:var(--acc)}
+.switch[aria-pressed="true"]::after{transform:translateX(22px);background:var(--acc-ink)}
+.switch:disabled{opacity:.4;cursor:not-allowed}
+
+/* 主面板 */
+.hero{
+  position:relative;border:1px solid var(--line);border-radius:20px;overflow:hidden;
+  background:linear-gradient(160deg,var(--panel-2),var(--panel) 60%);
+  display:flex;flex-direction:column;padding:30px 36px 26px;min-height:0;
+}
+.hero-title{font-size:33px;font-weight:700;letter-spacing:.01em;line-height:1.2}
+.hero-sub{font-size:14px;color:var(--muted);margin-top:8px}
+.steps{display:flex;align-items:flex-start;gap:0;margin-top:30px}
+.step{flex:1;position:relative;padding-right:18px}
+.step .s-num{font-family:var(--font-display);font-weight:700;font-size:26px;color:var(--dim);line-height:1;font-variant-numeric:tabular-nums;transition:color .3s}
+.step .s-name{font-size:14.5px;font-weight:700;margin-top:8px}
+.step .s-sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5}
+.step::after{content:"";position:absolute;top:12px;right:6px;width:calc(100% - 60px);height:1px;background:var(--line-strong)}
+.step:last-child::after{display:none}
+.step.hot .s-num{color:var(--acc)}
+.hero-cta{margin-top:auto;padding-top:26px}
+.btn-primary{
+  width:100%;height:58px;border-radius:14px;font-size:17px;font-weight:700;letter-spacing:.06em;
+  background:var(--acc);color:var(--acc-ink);
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  box-shadow:0 6px 18px var(--acc-shadow);
+  transition:filter .18s ease,transform .18s ease;
+}
+.btn-primary:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-primary svg{width:19px;height:19px}
+.btn-primary:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.hero-note{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;color:var(--dim);margin-top:13px}
+.hero-note svg{width:14px;height:14px;color:var(--acc)}
+.btn-ghost{
+  height:48px;padding:0 26px;border-radius:12px;font-size:14.5px;font-weight:500;
+  border:1px solid var(--line-strong);color:var(--text);background:var(--surface-3);
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:color .18s ease,border-color .18s ease,background-color .18s ease;
+}
+.btn-ghost:hover{border-color:var(--acc);color:var(--acc);background:var(--acc-soft)}
+.btn-danger{height:44px;padding:0 22px;border-radius:11px;font-size:14px;font-weight:700;color:var(--danger);border:1px solid var(--danger-line);background:var(--danger-soft);transition:background-color .18s ease}
+.btn-danger:hover{background:var(--danger-soft2)}
+
+/* 异常横幅 */
+.notice{
+  display:none;align-items:center;gap:12px;margin:0 24px;padding:12px 16px;border-radius:12px;
+  border:1px solid var(--warn-line);background:var(--warn-soft);color:var(--warn);font-size:13.5px;
+  position:relative;z-index:2;
+}
+.notice.show{display:flex;animation:screenIn .3s ease}
+.notice svg{width:18px;height:18px;flex:none}
+.notice .n-act{margin-left:auto;flex:none;font-size:13px;font-weight:700;color:var(--warn);border:1px solid var(--warn-line3);padding:7px 14px;border-radius:9px;transition:background-color .18s ease}
+.notice .n-act:hover{background:var(--warn-soft2)}
+
+/* 底部遥测条 */
+.telemetry{
+  position:relative;z-index:1;flex:none;height:42px;display:flex;align-items:center;gap:18px;
+  padding:0 24px;border-top:1px solid var(--line);
+  font-family:var(--font-mono);font-size:11.5px;color:var(--dim);font-variant-numeric:tabular-nums;
+  background:var(--foot-bg);
+}
+.telemetry .t-item{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.telemetry .t-item b{color:var(--muted);font-weight:600}
+.telemetry .spacer{flex:1}
+.telemetry .t-acc{color:var(--acc)}
+
+/* 车机系统导航条（全屏设置可隐藏） */
+.carbar{
+  position:relative;z-index:2;flex:none;height:52px;display:flex;align-items:center;justify-content:center;gap:44px;
+  background:var(--carbar-bg);border-top:1px solid var(--line);color:var(--muted);
+}
+.carbar .c-btn{width:40px;height:40px;display:grid;place-items:center;border-radius:10px;color:var(--dim)}
+.carbar .c-btn svg{width:20px;height:20px}
+.carbar .c-clock{font-family:var(--font-display);font-weight:600;font-size:17px;color:var(--muted);letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.carbar .c-temp{font-size:12px;font-family:var(--font-mono)}
+#device.hide-carbar .carbar{display:none}
+
+/* ---------- 连接流程公共 ---------- */
+.flow-body{position:relative;z-index:1;flex:1;display:flex;align-items:center;justify-content:center;gap:64px;padding:24px 60px;min-height:0}
+.flow-left{display:flex;flex-direction:column;align-items:center;gap:18px}
+.flow-right{width:400px;display:flex;flex-direction:column;gap:0}
+.flow-title{font-size:30px;font-weight:700}
+.flow-hint{font-size:14px;color:var(--muted);margin-top:10px;line-height:1.7}
+.flow-actions{margin-top:28px;display:flex;gap:12px}
+
+/* 二维码 */
+.qr-frame{position:relative;padding:18px;border-radius:18px;background:var(--qr-paper);box-shadow:0 18px 50px var(--shadow-1)}
+.qr-frame canvas{display:block;width:252px;height:252px;border-radius:6px}
+.qr-corner{position:absolute;width:26px;height:26px;border:2.5px solid var(--acc)}
+.qr-corner.tl{left:-8px;top:-8px;border-right:none;border-bottom:none;border-radius:6px 0 0 0}
+.qr-corner.tr{right:-8px;top:-8px;border-left:none;border-bottom:none;border-radius:0 6px 0 0}
+.qr-corner.bl{left:-8px;bottom:-8px;border-right:none;border-top:none;border-radius:0 0 0 6px}
+.qr-corner.br{right:-8px;bottom:-8px;border-left:none;border-top:none;border-radius:0 0 6px 0}
+.qr-caption{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:8px}
+.qr-caption svg{width:15px;height:15px;color:var(--acc)}
+.qr-refresh{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;transition:color .18s ease,background-color .18s ease}
+.qr-refresh:hover{color:var(--acc);background:var(--acc-soft)}
+.qr-refresh svg{width:13px;height:13px}
+
+/* 连接码 PIN */
+.pin-row{display:flex;gap:12px}
+.pin-cell{
+  width:66px;height:86px;border-radius:13px;display:grid;place-items:center;
+  font-family:var(--font-display);font-weight:700;font-size:44px;color:var(--acc);font-variant-numeric:tabular-nums;
+  background:var(--panel-2);
+  border:1px solid var(--acc-line);
+  box-shadow:inset 0 1px 0 var(--edge-hi2),0 8px 22px var(--shadow-3);
+  animation:pinIn .5s cubic-bezier(.2,.8,.3,1) backwards;
+}
+.pin-cell:nth-child(1){animation-delay:.05s}.pin-cell:nth-child(2){animation-delay:.12s}
+.pin-cell:nth-child(3){animation-delay:.19s}.pin-cell:nth-child(4){animation-delay:.26s}
+.pin-cell:nth-child(5){animation-delay:.33s}.pin-cell:nth-child(6){animation-delay:.40s}
+@keyframes pinIn{from{opacity:0;transform:translateY(14px) scale(.9)}to{opacity:1;transform:none}}
+
+/* 时间线（扫码页右侧） */
+.timeline{display:flex;flex-direction:column;margin-top:26px}
+.tl-item{display:flex;gap:16px;position:relative;padding-bottom:26px}
+.tl-item:last-child{padding-bottom:0}
+.tl-item::before{content:"";position:absolute;left:11px;top:26px;bottom:2px;width:1.5px;background:var(--line-strong)}
+.tl-item:last-child::before{display:none}
+.tl-node{width:23px;height:23px;border-radius:50%;flex:none;border:1.5px solid var(--line-strong);display:grid;place-items:center;background:var(--bg-2);color:transparent;transition:border-color .3s ease,background-color .3s ease,color .3s ease;z-index:1}
+.tl-node svg{width:12px;height:12px}
+.tl-item.done .tl-node{border-color:var(--acc);background:var(--acc);color:var(--acc-ink)}
+.tl-item.done::before{background:var(--acc-line2)}
+.tl-item.now .tl-node{border-color:var(--acc);box-shadow:0 0 0 4px var(--acc-pulse1)}
+.tl-item.now .tl-node::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--acc)}
+.tl-name{font-size:15px;font-weight:700;color:var(--dim);transition:color .3s}
+.tl-sub{font-size:12px;color:var(--dim);margin-top:3px}
+.tl-item.done .tl-name,.tl-item.now .tl-name{color:var(--text)}
+.tl-item.now .tl-name{color:var(--acc)}
+.tl-item.done .tl-sub,.tl-item.now .tl-sub{color:var(--muted)}
+
+/* 连接中：雷达环 */
+.radar{position:relative;width:210px;height:210px;flex:none}
+.radar .ring{position:absolute;inset:0;border-radius:50%;border:1px solid var(--line-strong)}
+.radar .ring.r2{inset:26px}.radar .ring.r3{inset:52px}
+.radar .sweep{position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(from 0deg,var(--acc-line4),transparent 70deg,transparent 360deg);
+  animation:spin 2.2s linear infinite;opacity:.75;
+  -webkit-mask:radial-gradient(circle,transparent 30px,var(--qr-ink) 31px);mask:radial-gradient(circle,transparent 30px,var(--qr-ink) 31px);
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+.radar .core{position:absolute;inset:78px;border-radius:50%;background:var(--acc-soft);border:1px solid var(--acc-line4);display:grid;place-items:center;color:var(--acc)}
+.radar .core svg{width:26px;height:26px}
+.checklist{display:flex;flex-direction:column;gap:13px;margin-top:26px}
+.ck-item{display:flex;align-items:center;gap:12px;font-size:14.5px;color:var(--dim);transition:color .3s}
+.ck-item .ck-box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--line-strong);display:grid;place-items:center;color:transparent;flex:none;transition:border-color .3s ease,background-color .3s ease,color .3s ease}
+.ck-item .ck-box svg{width:12px;height:12px}
+.ck-item.done{color:var(--text)}
+.ck-item.done .ck-box{background:var(--acc);border-color:var(--acc);color:var(--acc-ink)}
+.ck-item.now{color:var(--acc)}
+.ck-item.now .ck-box{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-pulse1)}
+.ck-item .ck-state{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--dim)}
+.ck-item.done .ck-state{color:var(--ok)}
+.ck-item.now .ck-state{color:var(--acc)}
+
+/* ---------- 投屏 ---------- */
+#screen-project{background:var(--bg-2)}
+.proj-mock{position:absolute;inset:0;z-index:0}
+.proj-mock svg{width:100%;height:100%;display:block}
+.proj-hud{
+  position:absolute;left:0;right:0;top:0;z-index:5;padding:16px 22px;
+  display:flex;align-items:center;gap:12px;
+  background:linear-gradient(180deg,var(--hud-scrim),transparent);
+  transition:opacity .5s ease,transform .5s ease;
+}
+.js .proj-hud.hidden{opacity:0;transform:translateY(-8px);pointer-events:none}
+.hud-chip{display:flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:12px;color:var(--text);
+  padding:8px 14px;border-radius:999px;background:var(--hud-bg);border:1px solid var(--line)}
+.hud-chip .dot{width:6px;height:6px}
+.hud-spacer{flex:1}
+.hud-btn{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:var(--text);
+  background:var(--hud-bg);border:1px solid var(--line);transition:border-color .18s ease,color .18s ease,background-color .18s ease}
+.hud-btn:hover{border-color:var(--acc);color:var(--acc)}
+.hud-btn svg{width:18px;height:18px}
+.hud-stop{width:auto;padding:0 18px;gap:8px;display:flex;align-items:center;font-size:13.5px;font-weight:700;color:var(--danger);border-color:var(--danger-line2)}
+.hud-stop:hover{background:var(--danger-soft3);color:var(--danger);border-color:var(--danger)}
+.proj-tip{position:absolute;right:22px;bottom:16px;z-index:4;font-size:11.5px;color:var(--text-faint);font-family:var(--font-mono);transition:opacity .5s}
+.proj-wait{position:absolute;inset:0;z-index:6;display:none;place-items:center;background:var(--wait-bg)}
+.proj-wait.show{display:grid}
+.proj-wait .pw-inner{text-align:center}
+.proj-wait .pw-title{font-size:20px;font-weight:700;margin-top:18px}
+.proj-wait .pw-sub{font-size:13px;color:var(--muted);margin-top:8px;font-family:var(--font-mono)}
+.spinner{width:44px;height:44px;margin:0 auto;border-radius:50%;border:2.5px solid var(--line-strong);border-top-color:var(--acc);animation:spin 1s linear infinite}
+
+/* ---------- 设置 ---------- */
+.settings-body{position:relative;z-index:1;flex:1;display:grid;grid-template-columns:216px 1fr;min-height:0}
+.set-nav{border-right:1px solid var(--line);padding:18px 12px;display:flex;flex-direction:column;gap:4px;background:var(--nav-bg)}
+.set-nav button{
+  display:flex;align-items:center;gap:11px;text-align:left;padding:12px 14px;border-radius:11px;
+  font-size:14px;color:var(--muted);transition:color .18s ease,background-color .18s ease,border-color .18s ease;border:1px solid transparent;
+}
+.set-nav button svg{width:17px;height:17px;flex:none}
+.set-nav button:hover{color:var(--text);background:var(--surface-3)}
+.set-nav button.on{color:var(--acc);background:var(--acc-soft);border-color:var(--acc-shadow2);font-weight:700}
+.set-nav .nav-foot{margin-top:auto;padding:12px 14px;font-family:var(--font-mono);font-size:10.5px;color:var(--dim);line-height:1.8}
+.set-content{overflow-y:auto;padding:22px 30px 30px;min-height:0}
+.set-content::-webkit-scrollbar{width:8px}
+.set-content::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:8px}
+.set-pane{display:none}
+.set-pane.on{display:block;animation:screenIn .3s ease}
+.set-group-title{font-family:var(--font-body);font-size:13px;font-weight:700;color:var(--acc);letter-spacing:normal;margin:6px 0 12px;display:flex;align-items:center;gap:10px}
+.set-group-title::after{content:"";flex:1;height:1px;background:var(--line)}
+.set-card{border:1px solid var(--line);border-radius:var(--r-lg);background:var(--panel);color:var(--text);overflow:hidden;margin-bottom:22px}
+.set-row{display:flex;align-items:center;gap:16px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.set-row:last-child{border-bottom:none}
+.set-row.col{flex-direction:column;align-items:stretch;gap:12px}
+.sr-main{flex:1;min-width:0}
+.sr-title{font-size:14.5px;font-weight:500}
+.sr-hint{font-size:12px;color:var(--dim);margin-top:4px;line-height:1.6}
+.sr-note{font-size:12px;color:var(--warn);margin-top:6px;display:flex;align-items:center;gap:6px}
+.sr-note.ok{color:var(--ok)}
+.sr-note svg{width:13px;height:13px;flex:none}
+/* 分段选择 */
+.seg{display:inline-flex;background:var(--inset);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;flex:none}
+.seg button{padding:8px 16px;border-radius:7px;font-size:13px;color:var(--muted);transition:color .18s ease,background-color .18s ease;white-space:nowrap}
+.seg button:hover{color:var(--text)}
+.seg button.on{background:var(--acc);color:var(--acc-ink);font-weight:700}
+.seg button:disabled{opacity:.35;cursor:not-allowed}
+/* 声道 chips */
+.chips-wrap{overflow-x:auto;padding-bottom:4px}
+.chips-wrap::-webkit-scrollbar{height:6px}
+.chips-wrap::-webkit-scrollbar-thumb{background:var(--scroll);border-radius:6px}
+.chips{display:inline-flex;gap:5px;background:var(--inset);border:1px solid var(--line);border-radius:10px;padding:4px}
+.chips button{min-width:44px;padding:8px 10px;border-radius:7px;font-size:13px;font-family:var(--font-mono);color:var(--muted);transition:color .15s ease,background-color .15s ease}
+.chips button:hover{color:var(--text)}
+.chips button.on{background:var(--acc);color:var(--acc-ink);font-weight:600}
+.btn-mini{flex:none;height:38px;padding:0 18px;border-radius:9px;font-size:13px;font-weight:700;color:var(--acc);border:1px solid var(--acc-line2);background:var(--acc-soft);transition:background-color .18s ease,color .18s ease,border-color .18s ease;display:inline-flex;align-items:center;gap:7px}
+.btn-mini:hover{background:var(--acc-soft3)}
+.btn-mini:disabled{opacity:.45;cursor:not-allowed}
+.btn-mini svg{width:14px;height:14px}
+.btn-mini.neutral{color:var(--muted);border-color:var(--line-strong);background:var(--surface-3)}
+.btn-mini.neutral:hover{color:var(--text);border-color:var(--line-strong)}
+.preview-note{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.preview-note.warn{color:var(--warn)}
+.preview-note svg{width:13px;height:13px}
+.text-input{
+  height:42px;border-radius:10px;border:1px solid var(--line-strong);background:var(--inset);color:var(--text);
+  font-family:var(--font-mono);font-size:13.5px;padding:0 14px;width:250px;letter-spacing:normal;
+}
+.text-input::placeholder{color:var(--dim)}
+.mono-line{font-family:var(--font-mono);font-size:12px;color:var(--muted);letter-spacing:.03em}
+.perm-chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid var(--ok-line);color:var(--ok);background:var(--ok-soft)}
+.perm-chip.miss{border-color:var(--warn-line2);color:var(--warn);background:var(--warn-soft)}
+
+/* Toast */
+#toast{
+  position:absolute;left:50%;bottom:70px;transform:translateX(-50%) translateY(16px);z-index:80;
+  background:var(--toast-bg);border:1px solid var(--line-strong);border-radius:12px;
+  padding:12px 20px;font-size:13.5px;display:flex;align-items:center;gap:10px;
+  opacity:0;pointer-events:none;transition:opacity .3s cubic-bezier(.2,.9,.3,1),transform .3s cubic-bezier(.2,.9,.3,1);
+  box-shadow:0 8px 20px var(--shadow-1);
+}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+#toast svg{width:16px;height:16px;color:var(--acc);flex:none}
+#toast.warn svg{color:var(--warn)}
+
+/* 入场编排 */
+.reveal{animation:rise .55s cubic-bezier(.2,.8,.3,1) backwards}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+.d1{animation-delay:.06s}.d2{animation-delay:.14s}.d3{animation-delay:.22s}.d4{animation-delay:.3s}.d5{animation-delay:.38s}
+
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <!-- 原型导航（不属于产品界面） -->
+  <div id="toolbar">
+    <span class="tb-label">原型导航</span>
+    <button class="tb-chip on" data-jump="home">无线首页</button>
+    <button class="tb-chip" data-jump="home-wired">有线首页</button>
+    <button class="tb-chip" data-jump="scan">扫码连接</button>
+    <button class="tb-chip" data-jump="pin">有线配对</button>
+    <button class="tb-chip" data-jump="connecting">连接中</button>
+    <button class="tb-chip" data-jump="project">投屏中</button>
+    <button class="tb-chip" data-jump="settings">设置</button>
+    <button class="tb-chip" data-jump="notice">异常提示</button>
+    <span class="tb-sep"></span>
+    <button class="tb-chip demo" id="demoBtn">▶ 完整演示</button>
+    <button class="tb-chip" id="carbarBtn">隐藏车机导航栏</button>
+  </div>
+
+  <div id="bezel">
+    <div id="device">
+
+      <!-- ================= 首页 ================= -->
+      <section class="screen active" id="screen-home">
+        <header class="topbar">
+          <div class="brand">
+            <div class="brand-mark">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M9 15l6-6"/><path d="M11 6l1.5-1.5a4 4 0 015.7 5.7L16.5 12"/><path d="M13 18l-1.5 1.5a4 4 0 01-5.7-5.7L7.5 12"/></svg>
+            </div>
+            <div>
+              <div class="brand-name">OpenHC</div>
+              <div class="brand-tag">HiCar 连接助手</div>
+            </div>
+          </div>
+          <div class="spacer"></div>
+          <div class="status-chip" id="btChip"><span class="dot" id="btDot"></span><span id="btText">蓝牙已开启</span></div>
+          <div class="status-chip">自动连接已开启</div>
+          <button class="icon-btn" data-jump="settings" aria-label="设置">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33h.01a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51h.01a1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82v.01a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+          </button>
+        </header>
+
+        <div class="notice" id="noticeBanner">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span id="noticeText">请先打开车机蓝牙，无线连接需要蓝牙配对。</span>
+          <button class="n-act" id="noticeAct">打开蓝牙</button>
+        </div>
+
+        <div class="home-body">
+          <aside class="rail">
+            <div class="rail-label reveal d1">连接方式</div>
+            <button class="mode-card sel reveal d2" id="modeWireless">
+              <span class="m-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="19.5" r="1.3" fill="currentColor" stroke="none"/></svg></span>
+              <span><span class="m-title">无线连接</span><div class="m-sub">推荐，扫码即连</div></span>
+              <span class="m-check"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </button>
+            <button class="mode-card reveal d3" id="modeWired">
+              <span class="m-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M7 2v6"/><path d="M17 2v6"/><path d="M5 8h14v3a7 7 0 01-7 7 7 7 0 01-7-7V8z"/><path d="M12 18v4"/></svg></span>
+              <span><span class="m-title">有线连接</span><div class="m-sub">USB 数据线，无需 WiFi</div></span>
+              <span class="m-check"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+            </button>
+            <div class="pref-card reveal d4">
+              <div class="rail-label" style="margin-bottom:11px">连接偏好</div>
+              <div class="pref-row">
+                <div style="flex:1">
+                  <div class="p-title">自动连接手机</div>
+                  <div class="p-sub">首次配对后，上车自动恢复连接</div>
+                </div>
+                <button class="switch" aria-pressed="true" aria-label="自动连接手机"></button>
+              </div>
+            </div>
+          </aside>
+
+          <main class="hero reveal d3">
+            <h1 class="hero-title" id="heroTitle">连接你的华为手机</h1>
+            <p class="hero-sub" id="heroSub">导航、音乐与通话，一步投到车机屏幕</p>
+            <div class="steps" id="heroSteps"><!-- JS 渲染 --></div>
+            <div class="hero-cta">
+              <button class="btn-primary" id="startBtn">
+                <span id="startBtnText">开始无线连接</span>
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+              </button>
+              <div class="hero-note">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                <span id="heroNote">首次需扫码，之后上车自动连接</span>
+              </div>
+            </div>
+          </main>
+        </div>
+
+        <footer class="telemetry">
+          <span class="t-item"><b>OpenHC</b> 0.2.1</span>
+          <span class="spacer"></span>
+          <span class="t-item">蓝牙 <b>ON</b></span>
+          <span class="t-item">热点 <b>READY</b></span>
+          <span class="t-item">屏幕 <b>1920×720 @ 60Hz</b></span>
+          <span class="t-item t-acc" id="telemetryMode">无线待机</span>
+        </footer>
+        <nav class="carbar">
+          <span class="c-temp">22.0°C</span>
+          <button class="c-btn" aria-label="返回"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button class="c-btn" aria-label="主页"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></button>
+          <button class="c-btn" aria-label="多任务"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
+          <span class="c-clock" id="carClock">08:02</span>
+        </nav>
+      </section>
+
+      <!-- ================= 无线 · 扫码 ================= -->
+      <section class="screen" id="screen-scan">
+        <header class="topbar">
+          <button class="back-btn" data-jump="home"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>返回</button>
+          <span class="screen-title">无线连接</span>
+          <div class="spacer"></div>
+          <div class="status-chip">热点已开启</div>
+        </header>
+        <div class="flow-body">
+          <div class="flow-left reveal d1">
+            <div class="qr-frame">
+              <span class="qr-corner tl"></span><span class="qr-corner tr"></span>
+              <span class="qr-corner bl"></span><span class="qr-corner br"></span>
+              <canvas id="qrCanvas" width="252" height="252" aria-label="连接二维码（示意）"></canvas>
+            </div>
+            <div class="qr-caption">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+              用华为手机相机或 HiCar 扫码
+            </div>
+            <button class="qr-refresh" id="qrRefresh">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+              二维码过期？点击刷新
+            </button>
+          </div>
+          <div class="flow-right reveal d2">
+            <div class="flow-title">请用手机扫码</div>
+            <p class="flow-hint">连接码已包含在二维码内，扫码后在手机上点「连接」即可。</p>
+            <div class="timeline">
+              <div class="tl-item done"><span class="tl-node"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><div><div class="tl-name">生成二维码</div><div class="tl-sub">车机热点已就绪</div></div></div>
+              <div class="tl-item now"><span class="tl-node"></span><div><div class="tl-name">手机扫码</div><div class="tl-sub">等待手机扫描…</div></div></div>
+              <div class="tl-item"><span class="tl-node"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><div><div class="tl-name">手机上确认连接</div><div class="tl-sub">蓝牙配对 · 免码回连</div></div></div>
+              <div class="tl-item"><span class="tl-node"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span><div><div class="tl-name">开始投屏</div><div class="tl-sub">自动进入 HiCar</div></div></div>
+            </div>
+            <div class="flow-actions">
+              <button class="btn-ghost" data-jump="home">取消连接</button>
+            </div>
+          </div>
+        </div>
+        <footer class="telemetry">
+          <span class="t-item"><b>OpenHC</b> 0.2.1</span>
+          <span class="spacer"></span>
+          <span class="t-item">SSID <b>OpenHC-5G</b></span>
+          <span class="t-item">蓝牙 <b>LISTENING</b></span>
+          <span class="t-item t-acc">等待扫码</span>
+        </footer>
+        <nav class="carbar">
+          <span class="c-temp">22.0°C</span>
+          <button class="c-btn" aria-label="返回"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button class="c-btn" aria-label="主页"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></button>
+          <button class="c-btn" aria-label="多任务"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
+          <span class="c-clock">08:02</span>
+        </nav>
+      </section>
+
+      <!-- ================= 有线 · 配对码 ================= -->
+      <section class="screen" id="screen-pin">
+        <header class="topbar">
+          <button class="back-btn" data-jump="home"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>返回</button>
+          <span class="screen-title">有线连接</span>
+          <div class="spacer"></div>
+          <div class="status-chip">USB 已连接</div>
+        </header>
+        <div class="flow-body">
+          <div class="flow-left reveal d1" style="gap:24px">
+            <div class="pin-row" id="pinRow"><!-- JS 渲染 --></div>
+            <div class="qr-caption">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+              首次连接：请在手机上输入此连接码
+            </div>
+          </div>
+          <div class="flow-right reveal d2">
+            <div class="flow-title">配对中</div>
+            <p class="flow-hint">手机已插上车机。输入连接码完成首次配对，之后插线即连，不再输码。</p>
+            <div class="checklist">
+              <div class="ck-item done"><span class="ck-box"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>VPN 与 USB 监听<span class="ck-state">OK</span></div>
+              <div class="ck-item done"><span class="ck-box"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>检测到手机<span class="ck-state">OK</span></div>
+              <div class="ck-item now"><span class="ck-box"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>等待输入连接码<span class="ck-state">WAIT</span></div>
+              <div class="ck-item"><span class="ck-box"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>建立设备会话<span class="ck-state">IDLE</span></div>
+            </div>
+            <div class="flow-actions">
+              <button class="btn-ghost" data-jump="home">取消连接</button>
+            </div>
+          </div>
+        </div>
+        <footer class="telemetry">
+          <span class="t-item"><b>OpenHC</b> 0.2.1</span>
+          <span class="spacer"></span>
+          <span class="t-item">USB <b>ATTACHED</b></span>
+          <span class="t-item">VPN <b>ACTIVE</b></span>
+          <span class="t-item t-acc">配对中</span>
+        </footer>
+        <nav class="carbar">
+          <span class="c-temp">22.0°C</span>
+          <button class="c-btn" aria-label="返回"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button class="c-btn" aria-label="主页"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></button>
+          <button class="c-btn" aria-label="多任务"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
+          <span class="c-clock">08:02</span>
+        </nav>
+      </section>
+
+      <!-- ================= 连接中 ================= -->
+      <section class="screen" id="screen-connecting">
+        <header class="topbar">
+          <button class="back-btn" data-jump="home"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>返回</button>
+          <span class="screen-title" id="connTitle">无线连接</span>
+          <div class="spacer"></div>
+          <div class="status-chip">正在连接</div>
+        </header>
+        <div class="flow-body">
+          <div class="flow-left reveal d1">
+            <div class="radar">
+              <div class="ring"></div><div class="ring r2"></div><div class="ring r3"></div>
+              <div class="sweep"></div>
+              <div class="core"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="19.5" r="1.3" fill="currentColor" stroke="none"/></svg></div>
+            </div>
+          </div>
+          <div class="flow-right reveal d2">
+            <div class="flow-title">正在连接</div>
+            <p class="flow-hint" id="connHint">手机已确认，正在建立安全会话…</p>
+            <div class="checklist" id="connChecklist">
+              <div class="ck-item" data-ck="0"><span class="ck-box"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>握手<span class="ck-state">IDLE</span></div>
+              <div class="ck-item" data-ck="1"><span class="ck-box"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>认证（免码回连）<span class="ck-state">IDLE</span></div>
+              <div class="ck-item" data-ck="2"><span class="ck-box"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>建立设备会话<span class="ck-state">IDLE</span></div>
+              <div class="ck-item" data-ck="3"><span class="ck-box"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>协商投屏参数<span class="ck-state">IDLE</span></div>
+            </div>
+            <div class="flow-actions">
+              <button class="btn-ghost" data-jump="home">取消连接</button>
+            </div>
+          </div>
+        </div>
+        <footer class="telemetry">
+          <span class="t-item"><b>OpenHC</b> 0.2.1</span>
+          <span class="spacer"></span>
+          <span class="t-item">链路 <b>WiFi 5GHz</b></span>
+          <span class="t-item t-acc" id="connTelemetry">握手</span>
+        </footer>
+        <nav class="carbar">
+          <span class="c-temp">22.0°C</span>
+          <button class="c-btn" aria-label="返回"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button class="c-btn" aria-label="主页"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></button>
+          <button class="c-btn" aria-label="多任务"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
+          <span class="c-clock">08:02</span>
+        </nav>
+      </section>
+
+      <!-- ================= 投屏中 ================= -->
+      <section class="screen" id="screen-project">
+        <div class="proj-mock">
+          <!-- 模拟手机投屏内容：导航地图 + 音乐卡片 -->
+          <svg role="img" aria-label="模拟投屏画面：导航地图与音乐卡片" viewBox="0 0 1280 720" preserveAspectRatio="xMidYMid slice">
+            <defs>
+              <linearGradient id="mapbg" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" style="stop-color:var(--map-bg1)"/><stop offset="1" style="stop-color:var(--map-bg2)"/>
+              </linearGradient>
+              <linearGradient id="route" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" style="stop-color:var(--acc)"/><stop offset="1" style="stop-color:var(--blue)"/>
+              </linearGradient>
+              <linearGradient id="album" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" style="stop-color:var(--acc-deep2)"/><stop offset="1" style="stop-color:var(--map-album2)"/>
+              </linearGradient>
+              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <rect width="1280" height="720" fill="url(#mapbg)"/>
+            <!-- 街区 -->
+            <g style="stroke:var(--map-street)" stroke-width="14" fill="none" opacity=".9">
+              <path d="M-20 180 H1300"/><path d="M-20 400 H1300"/><path d="M-20 600 H1300"/>
+              <path d="M200 -20 V740"/><path d="M480 -20 V740"/><path d="M760 -20 V740"/><path d="M1040 -20 V740"/>
+            </g>
+            <g style="stroke:var(--map-street2)" stroke-width="5" fill="none">
+              <path d="M-20 90 H1300"/><path d="M-20 300 H1300"/><path d="M-20 500 H1300"/><path d="M-20 680 H1300"/>
+              <path d="M90 -20 V740"/><path d="M340 -20 V740"/><path d="M620 -20 V740"/><path d="M900 -20 V740"/><path d="M1180 -20 V740"/>
+            </g>
+            <!-- 绿地 / 水域 -->
+            <rect x="510" y="210" width="220" height="160" rx="18" style="fill:var(--map-green)"/>
+            <rect x="1070" y="430" width="190" height="140" rx="18" style="fill:var(--map-water)"/>
+            <!-- 路线 -->
+            <path d="M120 640 L200 640 L200 400 L480 400 L480 180 L760 180 L760 90 L1040 90" fill="none" stroke="url(#route)" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)" opacity=".95"/>
+            <path d="M120 640 L200 640 L200 400 L480 400 L480 180 L760 180 L760 90 L1040 90" fill="none" style="stroke:var(--map-ink)" stroke-width="2.5" stroke-dasharray="14 22" stroke-linecap="round" opacity=".8">
+              <animate attributeName="stroke-dashoffset" from="0" to="-72" dur="1.6s" repeatCount="indefinite"/>
+            </path>
+            <!-- 起点 / 终点 -->
+            <circle cx="120" cy="640" r="12" style="fill:var(--acc)" filter="url(#glow)"/>
+            <circle cx="120" cy="640" r="22" fill="none" style="stroke:var(--acc)" stroke-width="2" opacity=".4">
+              <animate attributeName="r" values="14;30" dur="1.8s" repeatCount="indefinite"/>
+              <animate attributeName="opacity" values=".5;0" dur="1.8s" repeatCount="indefinite"/>
+            </circle>
+            <g transform="translate(1040,90)">
+              <path d="M0 0 C-16 -22 -16 -44 0 -44 C16 -44 16 -22 0 0z" style="fill:var(--danger)" filter="url(#glow)"/>
+              <circle cx="0" cy="-32" r="6" style="fill:var(--bg-2)"/>
+            </g>
+            <!-- POI -->
+            <g font-family="Noto Sans SC,sans-serif" font-size="15" style="fill:var(--map-poi)">
+              <text x="540" y="295">中央公园</text>
+              <text x="1090" y="505">万象城</text>
+              <text x="250" y="360">科技南路</text>
+              <text x="800" y="150">滨海大道</text>
+            </g>
+            <!-- ETA 卡片 -->
+            <g transform="translate(952,556)">
+              <rect width="290" height="120" rx="18" style="fill:var(--panel);stroke:var(--map-card-line)" opacity=".96"/>
+              <text x="24" y="42" font-family="Rajdhani,Noto Sans SC" font-weight="700" font-size="34" style="fill:var(--acc)">12 分钟</text>
+              <text x="24" y="72" font-family="Noto Sans SC" font-size="15" style="fill:var(--muted)">4.2 公里，预计 08:14 到达</text>
+              <text x="24" y="98" font-family="Noto Sans SC" font-size="13" style="fill:var(--dim)">前方 300 米右转进入滨海大道</text>
+            </g>
+            <!-- 音乐卡片 -->
+            <g transform="translate(36,556)">
+              <rect width="330" height="120" rx="18" style="fill:var(--panel);stroke:var(--map-card-line)" opacity=".96"/>
+              <rect x="20" y="20" width="80" height="80" rx="12" fill="url(#album)"/>
+              <g transform="translate(60,60)" style="stroke:var(--map-ink)" stroke-width="3" fill="none" stroke-linecap="round"><path d="M-8 10 V-12 L12 -16 V6"/><circle cx="-12" cy="10" r="5"/><circle cx="8" cy="6" r="5"/></g>
+              <text x="118" y="46" font-family="Noto Sans SC" font-weight="700" font-size="17" style="fill:var(--text)">夜航星</text>
+              <text x="118" y="70" font-family="Noto Sans SC" font-size="13" style="fill:var(--muted)">群星 · 三体 动画原声</text>
+              <rect x="118" y="86" width="180" height="4" rx="2" style="fill:var(--scroll)"/>
+              <rect x="118" y="86" width="96" height="4" rx="2" style="fill:var(--acc)"/>
+            </g>
+          </svg>
+        </div>
+
+        <div class="proj-wait" id="projWait">
+          <div class="pw-inner">
+            <div class="spinner"></div>
+            <div class="pw-title">等待第一帧画面</div>
+            <div class="pw-sub">1920×720 60fps，协商完成</div>
+          </div>
+        </div>
+
+        <div class="proj-hud" id="projHud">
+          <div class="hud-chip">无线投屏<span style="margin-left:8px;padding-left:8px;border-left:1px solid var(--line)">1920×720 60fps</span></div>
+          <div class="hud-chip" style="color:var(--muted)">方向盘按键已接管</div>
+          <div class="hud-spacer"></div>
+          <button class="hud-btn" aria-label="上一首"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+          <button class="hud-btn" aria-label="播放/暂停"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg></button>
+          <button class="hud-btn" aria-label="下一首"><svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+          <button class="hud-btn hud-stop" id="stopProject">
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+            结束投屏
+          </button>
+        </div>
+        <div class="proj-tip" id="projTip">触摸画面可唤出控制 · Touch to show controls</div>
+      </section>
+
+      <!-- ================= 设置 ================= -->
+      <section class="screen" id="screen-settings">
+        <header class="topbar">
+          <button class="back-btn" data-jump="home"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>返回</button>
+          <span class="screen-title">设置</span>
+          <div class="spacer"></div>
+          <div class="status-chip">系统正常</div>
+        </header>
+        <div class="settings-body">
+          <nav class="set-nav">
+            <button class="on" data-pane="picture"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>画面</button>
+            <button data-pane="audio"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 010 7.07"/><path d="M19.07 4.93a10 10 0 010 14.14"/></svg>声音</button>
+            <button data-pane="wireless"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="19.5" r="1.3" fill="currentColor" stroke="none"/></svg>无线</button>
+            <button data-pane="boot"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 11-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>启动</button>
+            <button data-pane="connection"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 15l6-6"/><path d="M11 6l1.5-1.5a4 4 0 015.7 5.7L16.5 12"/><path d="M13 18l-1.5 1.5a4 4 0 01-5.7-5.7L7.5 12"/></svg>连接方式</button>
+            <button data-pane="diag"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>诊断</button>
+            <div class="nav-foot">OpenHC 0.2.1<br>GPL-3.0 开源<br>不连任何服务器</div>
+          </nav>
+
+          <div class="set-content">
+            <!-- 画面 -->
+            <div class="set-pane on" id="pane-picture">
+              <div class="set-group-title">画面</div>
+              <div class="set-card">
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">帧率</div><div class="sr-hint">自动跟随车机屏幕刷新率，当前 60Hz。下次连接生效。</div></div>
+                  <div class="seg" data-seg><button class="on">自动</button><button>30</button><button>60</button></div>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">清晰度</div><div class="sr-hint">决定向手机声明的目标码率。越高越清晰，也更占带宽。</div></div>
+                  <div class="seg" data-seg><button>标准</button><button class="on">高清 8M</button><button>超清 16M</button></div>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">全屏显示</div><div class="sr-hint">投屏时隐藏车机底部导航栏。</div></div>
+                  <button class="switch" aria-pressed="true" id="fullscreenSwitch" aria-label="全屏显示"></button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">按屏幕刷新节拍上屏</div><div class="sr-hint">画面与车机屏幕刷新对齐，减少撕裂（调试选项）。</div></div>
+                  <button class="switch" aria-pressed="true" aria-label="按屏幕刷新节拍上屏"></button>
+                </div>
+              </div>
+              <div class="set-group-title">媒体按键</div>
+              <div class="set-card">
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">转发方向盘媒体键</div><div class="sr-hint">上一首 / 下一首 / 播放暂停，转给手机处理。</div></div>
+                  <button class="switch" aria-pressed="true" aria-label="转发方向盘媒体键"></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 声音 -->
+            <div class="set-pane" id="pane-audio">
+              <div class="set-group-title">声音</div>
+              <div class="set-card">
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">把手机声音放到车机</div><div class="sr-hint">音乐与导航播报都从车机扬声器出声。</div></div>
+                  <button class="switch" aria-pressed="true" aria-label="把手机声音放到车机"></button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">声音延后</div><div class="sr-hint">声画不同步时，适当延后声音。</div></div>
+                  <div class="seg" data-seg><button class="on">最小</button><button>+50ms</button><button>+100ms</button><button>+200ms</button></div>
+                </div>
+                <div class="set-row col">
+                  <div style="display:flex;align-items:center;gap:14px">
+                    <div class="sr-main"><div class="sr-title">导航声道</div><div class="sr-hint">编号同 DiPlay。选「自动」按用途建流。</div></div>
+                    <span class="preview-note" data-note></span>
+                    <button class="btn-mini" data-preview>
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>试听
+                    </button>
+                  </div>
+                  <div class="chips-wrap"><div class="chips" data-chips></div></div>
+                </div>
+                <div class="set-row col">
+                  <div style="display:flex;align-items:center;gap:14px">
+                    <div class="sr-main"><div class="sr-title">媒体声道</div><div class="sr-hint">音乐等媒体声音走这一路。</div></div>
+                    <span class="preview-note" data-note></span>
+                    <button class="btn-mini" data-preview>
+                      <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>试听
+                    </button>
+                  </div>
+                  <div class="chips-wrap"><div class="chips" data-chips></div></div>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">车机麦克风</div><div class="sr-hint">通话与语音助手使用车机麦克风。</div></div>
+                  <span class="perm-chip">录音权限已允许</span>
+                  <button class="switch" aria-pressed="true" aria-label="车机麦克风"></button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">AAC 回退记录</div><div class="sr-hint">不出声的手机会自动改用 AAC 编码，可在此恢复。</div></div>
+                  <span class="mono-line">暂无记录</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 无线 -->
+            <div class="set-pane" id="pane-wireless">
+              <div class="set-group-title">无线</div>
+              <div class="set-card">
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">只用数据线连接</div><div class="sr-hint">开启后无线整体关闭，首页无线卡显示「已关闭」。</div></div>
+                  <button class="switch" aria-pressed="false" aria-label="只用数据线连接"></button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">无线方式</div><div class="sr-hint">车机开热点（默认）；5GHz 直连为试验功能，需安卓 10+。下次连接生效。</div></div>
+                  <div class="seg" data-seg><button class="on">车机热点</button><button>5GHz 直连</button></div>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">自动连接手机</div><div class="sr-hint">手机蓝牙连上车机、或打开 OpenHC 时，主动连上次无线配对过的手机。</div></div>
+                  <button class="switch" aria-pressed="true" aria-label="自动连接手机"></button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">车机蓝牙地址</div><div class="sr-hint">系统读不到蓝牙地址时才用。格式如 F4:26:79:DE:97:97。</div></div>
+                  <input class="text-input" placeholder="AA:BB:CC:DD:EE:FF" aria-label="车机蓝牙地址">
+                  <button class="btn-mini" data-save-bt>保存</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 启动 -->
+            <div class="set-pane" id="pane-boot">
+              <div class="set-group-title">启动</div>
+              <div class="set-card">
+                <div class="set-row">
+                  <div class="sr-main">
+                    <div class="sr-title">开机自动打开</div>
+                    <div class="sr-hint">车机启动后自动打开 OpenHC。</div>
+                    <div class="sr-note ok"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>开机后：自动连接上次配对过的手机</div>
+                  </div>
+                  <button class="switch" aria-pressed="true" aria-label="开机自动打开"></button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">开机静默连接</div><div class="sr-hint">开机后不弹界面，直接在后台连手机；连上才显示投屏。</div></div>
+                  <button class="switch" aria-pressed="false" aria-label="开机静默连接"></button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">悬浮窗权限</div><div class="sr-hint">安卓 10 起，开机后台打开界面需要此权限。</div></div>
+                  <span class="perm-chip">已授予</span>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">比亚迪后台启动设置</div><div class="sr-hint">在「选择禁止后台启动项」里把 OpenHC 的开关关掉；每次更新后要再关一次。</div></div>
+                  <button class="btn-mini neutral" data-byd>打开比亚迪设置</button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">上次开机</div></div>
+                  <span class="mono-line">11-24 08:02 冷启动，已打开并连上手机</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 连接方式 -->
+            <div class="set-pane" id="pane-connection">
+              <div class="set-group-title">连接方式</div>
+              <div class="set-card">
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">插线时不再弹授权框</div><div class="sr-hint">记住 USB 授权，插线直接开始连接。关闭则每次插线都询问。</div></div>
+                  <button class="switch" aria-pressed="false" aria-label="插线时不再弹授权框"></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 诊断 -->
+            <div class="set-pane" id="pane-diag">
+              <div class="set-group-title">诊断</div>
+              <div class="set-card">
+                <div class="set-row">
+                  <div class="sr-main">
+                    <div class="sr-title">导出诊断日志</div>
+                    <div class="sr-hint">出问题时导出，附到 Issue 里。不含密钥与设备标识。</div>
+                    <div class="sr-note ok" id="diagNote" style="display:none"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="diagNoteText"></span></div>
+                  </div>
+                  <button class="btn-mini" id="diagExport">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span id="diagExportText">导出</span>
+                  </button>
+                </div>
+                <div class="set-row">
+                  <div class="sr-main"><div class="sr-title">关于</div><div class="sr-hint">开源的 HiCar 车机端 · 与华为及任何车企无关。</div></div>
+                  <span class="mono-line">OpenHC 0.2.1（GPL-3.0）</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <nav class="carbar">
+          <span class="c-temp">22.0°C</span>
+          <button class="c-btn" aria-label="返回"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></button>
+          <button class="c-btn" aria-label="主页"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg></button>
+          <button class="c-btn" aria-label="多任务"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/></svg></button>
+          <span class="c-clock">08:02</span>
+        </nav>
+      </section>
+
+      <div id="toast"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span id="toastText"></span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+document.documentElement.classList.add("js");
+var $=function(s,r){return (r||document).querySelector(s)};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+var device=$("#device");
+var timers=[];
+function later(fn,ms){timers.push(setTimeout(fn,ms))}
+function clearTimers(){timers.forEach(clearTimeout);timers=[]}
+
+/* ---------- 屏幕切换 ---------- */
+var screens={home:"screen-home",scan:"screen-scan",pin:"screen-pin",connecting:"screen-connecting",project:"screen-project",settings:"screen-settings"};
+var current="home";
+function show(name){
+  clearTimers();
+  current=name;
+  $$(".screen").forEach(function(s){s.classList.remove("active")});
+  var el=document.getElementById(screens[name]||name);
+  if(el){el.classList.add("active")}
+  $$("#toolbar .tb-chip[data-jump]").forEach(function(c){
+    var j=c.getAttribute("data-jump");
+    c.classList.toggle("on",j===name||(name==="home"&&j==="home"&&mode==="wireless")||(name==="home"&&j==="home-wired"&&mode==="wired"));
+  });
+  if(name==="scan"){drawQR()}
+  if(name==="pin"){renderPIN()}
+  if(name==="connecting"){runChecklist()}
+  if(name==="project"){enterProject()}
+  if(name==="home"){hideNotice()}
+}
+$$("[data-jump]").forEach(function(b){
+  b.addEventListener("click",function(){
+    var j=b.getAttribute("data-jump");
+    if(j==="home-wired"){setMode("wired");show("home")}
+    else if(j==="notice"){show("home");showNotice()}
+    else{show(j)}
+  });
+});
+
+/* ---------- 首页模式 ---------- */
+var mode="wireless";
+var stepData={
+  wireless:[
+    {n:"01",name:"开始无线连接",sub:"点下方按钮生成二维码"},
+    {n:"02",name:"华为手机扫码",sub:"用相机或 HiCar 扫码"},
+    {n:"03",name:"手机上确认",sub:"确认后自动进入 HiCar"}
+  ],
+  wired:[
+    {n:"01",name:"开始有线连接",sub:"准备 VPN 与 USB 监听"},
+    {n:"02",name:"系统弹窗点允许",sub:"允许 OpenHC 建立 VPN"},
+    {n:"03",name:"数据线连手机",sub:"保持解锁，关闭 USB 调试"}
+  ]
+};
+function renderSteps(){
+  var box=$("#heroSteps");box.innerHTML="";
+  stepData[mode].forEach(function(s,i){
+    var d=document.createElement("div");
+    d.className="step"+(i===0?" hot":"");
+    d.innerHTML='<div class="s-num">'+s.n+'</div><div class="s-name">'+s.name+'</div><div class="s-sub">'+s.sub+'</div>';
+    box.appendChild(d);
+  });
+}
+function setMode(m){
+  mode=m;
+  $("#modeWireless").classList.toggle("sel",m==="wireless");
+  $("#modeWired").classList.toggle("sel",m==="wired");
+  if(m==="wireless"){
+    $("#heroTitle").textContent="连接你的华为手机";
+    $("#heroSub").textContent="导航、音乐与通话，一步投到车机屏幕";
+    $("#startBtnText").textContent="开始无线连接";
+    $("#heroNote").textContent="首次需扫码，之后上车自动连接";
+    $("#telemetryMode").textContent="无线待机";
+  }else{
+    $("#heroTitle").textContent="用数据线连接华为手机";
+    $("#heroSub").textContent="插上线就能投屏，不需要 WiFi";
+    $("#startBtnText").textContent="开始有线连接";
+    $("#heroNote").textContent="首次输入连接码，之后插线即连";
+    $("#telemetryMode").textContent="有线待机";
+  }
+  renderSteps();
+}
+$("#modeWireless").addEventListener("click",function(){setMode("wireless")});
+$("#modeWired").addEventListener("click",function(){setMode("wired")});
+$("#startBtn").addEventListener("click",function(){
+  if(mode==="wireless"){show("scan");later(function(){show("connecting");$("#connTitle").textContent="无线连接"},3200)}
+  else{show("pin");later(function(){show("connecting");$("#connTitle").textContent="有线连接"},3200)}
+});
+
+/* ---------- 异常横幅 / Toast ---------- */
+function showNotice(){
+  $("#noticeBanner").classList.add("show");
+  $("#btDot").className="dot warn";$("#btText").textContent="蓝牙未开启";
+}
+function hideNotice(){
+  $("#noticeBanner").classList.remove("show");
+  $("#btDot").className="dot";$("#btText").textContent="蓝牙已开启";
+}
+$("#noticeAct").addEventListener("click",function(){hideNotice();toast("蓝牙已开启，可以开始无线连接")});
+var toastTimer=null;
+function toast(msg,warn){
+  var t=$("#toast");$("#toastText").textContent=msg;
+  t.classList.toggle("warn",!!warn);t.classList.add("show");
+  clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove("show")},2600);
+}
+
+/* ---------- 二维码（原型示意，非真实可扫） ---------- */
+function drawQR(){
+  var c=$("#qrCanvas"),ctx=c.getContext("2d"),N=25,cell=c.width/N;
+  var cs=getComputedStyle(document.documentElement),paper=cs.getPropertyValue("--qr-paper").trim(),ink=cs.getPropertyValue("--qr-ink").trim();
+  var seed=Date.now()%100000;
+  function rnd(){seed=(seed*9301+49297)%233280;return seed/233280}
+  ctx.fillStyle=paper;ctx.fillRect(0,0,c.width,c.height);
+  ctx.fillStyle=ink;
+  function finder(x,y){
+    ctx.fillRect(x*cell,y*cell,7*cell,7*cell);
+    ctx.fillStyle=paper;ctx.fillRect((x+1)*cell,(y+1)*cell,5*cell,5*cell);
+    ctx.fillStyle=ink;ctx.fillRect((x+2)*cell,(y+2)*cell,3*cell,3*cell);
+  }
+  for(var y=0;y<N;y++)for(var x=0;x<N;x++){
+    var inF=(x<8&&y<8)||(x>N-9&&y<8)||(x<8&&y>N-9);
+    if(!inF&&rnd()>0.52)ctx.fillRect(x*cell,y*cell,cell,cell);
+  }
+  finder(0,0);finder(N-7,0);finder(0,N-7);
+  ctx.fillStyle=ink;
+  for(var i=8;i<N-8;i++){if(i%2===0){ctx.fillRect(i*cell,6*cell,cell,cell);ctx.fillRect(6*cell,i*cell,cell,cell)}}
+}
+$("#qrRefresh").addEventListener("click",function(){drawQR();toast("二维码已刷新")});
+
+/* ---------- 连接码 ---------- */
+function renderPIN(){
+  var row=$("#pinRow");row.innerHTML="";
+  var digits=[4,8,2,9,1,7];
+  digits.forEach(function(d){
+    var c=document.createElement("div");c.className="pin-cell";c.textContent=d;row.appendChild(c);
+  });
+}
+
+/* ---------- 连接中清单 ---------- */
+var ckStates=["WAIT","IDLE","IDLE","IDLE"];
+function runChecklist(){
+  var items=$$("#connChecklist .ck-item");
+  var telemetry=["握手","认证","建立会话","协商"];
+  var hints=["正在握手…","握手完成，正在认证（免码回连）…","正在建立设备会话…","会话已建立，正在协商投屏参数…"];
+  items.forEach(function(it){it.className="ck-item";$(".ck-state",it).textContent="IDLE"});
+  var i=0;
+  function tick(){
+    if(i>0){items[i-1].classList.remove("now");items[i-1].classList.add("done");$(".ck-state",items[i-1]).textContent="OK"}
+    if(i>=items.length){later(function(){show("project")},700);return}
+    items[i].classList.add("now");$(".ck-state",items[i]).textContent="WAIT";
+    $("#connTelemetry").textContent=telemetry[i];
+    $("#connHint").textContent=hints[i];
+    i++;later(tick,1100);
+  }
+  tick();
+}
+
+/* ---------- 投屏 HUD ---------- */
+var hudTimer=null;
+function enterProject(){
+  var wait=$("#projWait"),hud=$("#projHud"),tip=$("#projTip");
+  wait.classList.add("show");hud.classList.add("hidden");tip.style.opacity="0";
+  later(function(){
+    wait.classList.remove("show");
+    revealHud();
+  },1400);
+}
+function revealHud(){
+  var hud=$("#projHud"),tip=$("#projTip");
+  hud.classList.remove("hidden");tip.style.opacity="1";
+  clearTimeout(hudTimer);
+  hudTimer=setTimeout(function(){hud.classList.add("hidden");tip.style.opacity="0"},3400);
+}
+$("#screen-project").addEventListener("pointerdown",function(e){
+  if(e.target.closest("button"))return;
+  revealHud();
+});
+$("#stopProject").addEventListener("click",function(){
+  toast("投屏已结束");show("home");
+});
+
+/* ---------- 设置交互 ---------- */
+$$(".set-nav button").forEach(function(b){
+  b.addEventListener("click",function(){
+    $$(".set-nav button").forEach(function(x){x.classList.remove("on")});
+    b.classList.add("on");
+    $$(".set-pane").forEach(function(p){p.classList.remove("on")});
+    document.getElementById("pane-"+b.getAttribute("data-pane")).classList.add("on");
+    $(".set-content").scrollTop=0;
+  });
+});
+$$(".switch").forEach(function(sw){
+  sw.addEventListener("click",function(){
+    var on=sw.getAttribute("aria-pressed")==="true";
+    sw.setAttribute("aria-pressed",on?"false":"true");
+    if(sw.id==="fullscreenSwitch"){device.classList.toggle("hide-carbar",!on?false:true);toast(on?"投屏时将保留车机导航栏":"投屏时将全屏显示")}
+  });
+});
+$$("[data-seg]").forEach(function(seg){
+  $$("button",seg).forEach(function(b){
+    b.addEventListener("click",function(){
+      if(b.disabled)return;
+      $$("button",seg).forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+    });
+  });
+});
+/* 声道 chips：自动 + 1~20 */
+$$("[data-chips]").forEach(function(box,idx){
+  var labels=["自动"];for(var i=1;i<=20;i++)labels.push(String(i));
+  labels.forEach(function(l,i){
+    var b=document.createElement("button");b.textContent=l;
+    if((idx===0&&i===0)||(idx===1&&i===3))b.classList.add("on");
+    b.addEventListener("click",function(){
+      $$("button",box).forEach(function(x){x.classList.remove("on")});
+      b.classList.add("on");
+      var note=box.closest(".set-row").querySelector("[data-note]");
+      note.textContent="";note.className="preview-note";
+    });
+    box.appendChild(b);
+  });
+});
+/* 试听 */
+$$("[data-preview]").forEach(function(btn){
+  btn.addEventListener("click",function(){
+    if(btn.disabled)return;
+    var row=btn.closest(".set-row");
+    var note=row.querySelector("[data-note]");
+    var sel=$(".chips button.on",row);
+    btn.disabled=true;btn.innerHTML="试听中…";
+    note.textContent="";
+    later(function(){
+      btn.disabled=false;
+      btn.innerHTML='<svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M8 5v14l11-7z"/></svg>试听';
+      var label=sel?sel.textContent:"自动";
+      if(label==="自动"){note.textContent="按用途建流，播放正常";note.className="preview-note"}
+      else{note.textContent="声道 "+label+" 播放正常";note.className="preview-note"}
+    },1500);
+  });
+});
+/* 蓝牙地址保存 */
+$("[data-save-bt]").addEventListener("click",function(){
+  var input=$(".text-input");var v=input.value.trim();
+  if(v&&!/^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$/.test(v)){toast("地址格式不对，应形如 F4:26:79:DE:97:97",true);return}
+  toast(v?"已保存蓝牙地址":"已清除手填地址");
+});
+$("[data-byd]").addEventListener("click",function(){toast("原型演示：将打开比亚迪「选择禁止后台启动项」")});
+/* 诊断导出 */
+$("#diagExport").addEventListener("click",function(){
+  var btn=$("#diagExport");if(btn.disabled)return;
+  btn.disabled=true;$("#diagExportText").textContent="导出中…";$("#diagNote").style.display="none";
+  later(function(){
+    btn.disabled=false;$("#diagExportText").textContent="导出";
+    $("#diagNoteText").textContent="已保存到 下载/OpenHC/openhc-diag-20261124.zip";
+    $("#diagNote").style.display="flex";
+    toast("诊断日志已导出");
+  },1800);
+});
+
+/* ---------- 车机导航栏开关 / 时钟 ---------- */
+$("#carbarBtn").addEventListener("click",function(){
+  var hidden=device.classList.toggle("hide-carbar");
+  this.textContent=hidden?"显示车机导航栏":"隐藏车机导航栏";
+});
+function clock(){
+  var d=new Date();
+  var s=("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+  $$(".c-clock").forEach(function(c){c.textContent=s});
+}
+clock();setInterval(clock,30000);
+
+/* ---------- 完整演示 ---------- */
+$("#demoBtn").addEventListener("click",function(){
+  setMode("wireless");show("home");
+  later(function(){show("scan")},1200);
+  later(function(){show("connecting");$("#connTitle").textContent="无线连接"},4600);
+  /* runChecklist 自带节奏，结束后自动进投屏 */
+});
+
+/* ---------- 等比缩放适配 ---------- */
+function fit(){
+  var pad=24,tb=$("#toolbar").offsetHeight;
+  var availW=window.innerWidth-pad*2;
+  var availH=window.innerHeight-tb-pad*2-14;
+  var scale=Math.min(availW/1300,availH/740,1.15);
+  $("#bezel").style.transform="scale("+scale+")";
+  $("#bezel").style.transformOrigin="center center";
+  /* 用负 margin 抵消缩放后的布局占位 */
+  var w=1300*scale,h=740*scale;
+  $("#bezel").style.margin=((h-740)/2)+"px "+((w-1300)/2)+"px";
+}
+window.addEventListener("resize",fit);
+fit();
+
+/* 初始化 */
+setMode("wireless");
+renderPIN();
+drawQR();
+})();
+</script>
+</body>
+</html>

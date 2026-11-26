@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 设置页：画面调试开关 -->
+    <string name="settings_full_screen">全屏显示</string>
+    <string name="settings_full_screen_hint">开：隐藏状态栏和导航栏，画面铺满整屏。关：保留导航栏并让出位置（常驻底栏遮挡画面时关闭）。下次连接生效。</string>
+    <string name="settings_video_frame_pacing">按屏幕刷新节拍上屏（调试，默认开）</string>
+    <string name="settings_video_frame_pacing_hint">开：每次刷新最多显示一帧，画面更均匀，最多晚一个刷新周期（60Hz 约 17ms）。关：立即上屏延迟最低，但可能跳帧。对比见日志 OpenHC-Video。下次连接生效。</string>
+</resources>

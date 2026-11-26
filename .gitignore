@@ -1,0 +1,39 @@
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Gradle / Kotlin
+.gradle/
+.kotlin/
+build/
+local.properties
+
+# 原生构建产物
+.cxx/
+.externalNativeBuild/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.log
+
+# 签名密钥、私有资料：不进仓库
+.private/
+*.jks
+*.keystore
+*.pk8
+*.p12
+*.pem
+*.key
+release-signing.properties
+
+# 安装包与抓包、日志原始数据
+*.apk
+*.aab
+*.pcap
+*.pcapng
+captures/
+
+# 连接参数不进仓库：构建时从本机目录注入（见 app/build.gradle.kts）
+/app/src/main/assets/openhc-identity.json

@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 和手机之间的 TCP/UDP（经 USB 网卡）。 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- 4.4 fork：5.0 及以下把运行日志和诊断报告写进公共「下载/OpenHC」文件夹，靠这条安装时授予，不用运行时申请。 -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="22" />
+    <!-- 连接期间留在前台，切到后台不断（安卓 9 起要声明）。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- 安卓 14 起前台服务要按类型声明权限。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!--
+        安卓 14 起 connectedDevice 类型的前台服务还要满足运行时前置条件之一（声明几种网络类普通权限之一、
+        拿到蓝牙运行时权限，或已有 USB 设备授权）。开始等插线时手机还没插上、没有 USB 授权可用，
+        所以声明这个普通权限（安装即授予）来满足；本应用不用它改任何网络设置。
+    -->
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <!-- 安卓 13 起显示前台服务通知要用户授权；拒绝了连接照常进行，只是看不到通知。 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--
+        车机麦克风交给手机（打电话、语音助手）：运行时权限，开始连接前申请。拒绝了连接照常进行，只是不声明麦克风，
+        手机继续用自己的麦克风。
+    -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!--
+        无线连接（扫码 → 蓝牙 → WiFi：车机开热点）：
+        - 蓝牙：安卓 11 及以前是安装即授予的旧权限；安卓 12 起开 RFCOMM 监听要运行时权限「附近的设备」。
+        - WiFi：读写 WiFi 状态是普通权限；开本地热点在安卓 13 起要「附近的 WiFi 设备」（声明不用于定位），
+          更早的版本要精确位置（安卓 12/12L 上要和大致位置一起申请，系统框里才能选精确；安卓 8～12 开热点还要系统定位开关打开）。
+          安卓 9 及以下「退出后恢复车机 WiFi」用 CHANGE_WIFI_STATE 打开 WiFi。本应用不读取位置。
+    -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!--
+        无线自动回连：车机发 BLE 广播、挂 GATT 服务，让配对过的手机靠近时自己连上来。安卓 12 起发广播要运行时权限
+        （也在「附近的设备」里），开始无线连接时一起申请；拒绝了照样能扫码，只是不能自动回连。更早用上面的旧权限。
+        设置「补全手机蓝牙配对」也用这几个：临时改车机蓝牙名称、挂 GATT 服务、发带名称的广播，结束时改回名称。
+    -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.ACCESS_COARSE_LOCATION"
+        android:maxSdkVersion="32" />
+    <!-- 这个属性安卓 12 起才有、这个权限安卓 13 起才有，老版本上两者都不起作用。 -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:ignore="UnusedAttribute" />
+
+    <!-- 没有蓝牙的车机仍可安装，只是用不了无线连接。 -->
+    <uses-feature
+        android:name="android.hardware.bluetooth"
+        android:required="false" />
+
+    <!--
+        设置「开机自动打开 OpenHC」（默认关）：收开机广播（熄火后再点火时有的车机会重发），收到后打开界面。
+        安卓 10 起后台应用打开界面要悬浮窗权限，由车主在系统里给；没给时开机打不开界面，其余功能不受影响。
+        再开着「开机静默连接」时开机不打开界面，在后台起前台服务等手机，手机连上时才把界面带到前台（同样要悬浮窗权限）。
+    -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- 有线连接要车机支持 USB 主机模式；不支持的车机仍可安装，只是用不了有线。 -->
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="false" />
+
+    <!-- 比亚迪车机「选择禁止后台启动项」对话框：安卓 11 起要声明，才查得到车机上有没有它（设置 → 启动）。 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.BYD_APPSTARTMANAGEMENT" />
+        </intent>
+    </queries>
+
+    <!-- 4.4 fork：Material 主题 API 21+，安卓 4.4 只有 Holo。 -->
+    <application
+        android:name=".OpenHcApp"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
+        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@android:style/Theme.Holo.NoActionBar">
+
+        <!--
+            旋转时重建 Activity，让手工 View 树按新方向重新排版（不再自己屏蔽 orientation/screenSize，否则界面不会重排）。
+            投屏中由 MainActivity 锁定方向，所以投屏过程里不会触发重建；连接状态挂在 OpenHcApp 上，重建不丢。
+            singleTop：插线拉起时（会话中途手机重新枚举也会再拉一次）交给已有的界面（onNewIntent），不叠新界面。
+        -->
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="keyboardHidden|uiMode"
+            android:exported="true"
+            android:launchMode="singleTop">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            插线就连（设置「插线时不再弹窗」，默认关，开关启停这个别名）：启用时插上华为、荣耀手机，系统问用不用本应用打开，
+            授权框也带「默认使用」勾选框；勾过以后系统直接授权并拉起 MainActivity。停用时系统不认本应用能处理手机，
+            插线不拉起，框里也没有「默认使用」。
+        -->
+        <activity-alias
+            android:name=".UsbAttachAlias"
+            android:enabled="false"
+            android:exported="true"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usb_device_filter" />
+        </activity-alias>
+
+        <!-- 开机自动打开（设置里的开关启停它，默认停用）：开机广播只有系统能发。 -->
+        <receiver
+            android:name=".startup.BootStartReceiver"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 有线投屏的前台服务：只由本应用自己启动。 -->
+        <service
+            android:name=".connection.ConnectionService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!-- 5.0 无线恢复：无线投屏的前台服务，只由本应用自己启动。 -->
+        <service
+            android:name=".wireless.WirelessService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+
+        <!--
+            5.0 无线恢复：手机蓝牙连上/断开车机时触发一次无线回连。默认停用（偏离上游：上游清单写 enabled=true，
+            与它自己的「默认不启用」注释矛盾，而且停用态回 DEFAULT=清单值等于关不掉）：
+            ① 4.4 上这个接收器一旦触发会强拉 WirelessController（4.4 不允许的构造路径），必须默认关死；
+            ② 用户配对任何手机都会把本应用进程拉起来。5.0 上第一次开始无线连接时
+            WirelessController.syncBluetoothReceiver() 按设置翻启用（connectOnBluetooth 默认开，等于上游默认行为）。
+        -->
+        <receiver
+            android:name=".wireless.BluetoothConnectionReceiver"
+            android:enabled="false"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

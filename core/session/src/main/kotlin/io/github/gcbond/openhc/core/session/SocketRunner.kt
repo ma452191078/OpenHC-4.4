@@ -1,0 +1,705 @@
+package io.github.gcbond.openhc.core.session
+
+import java.io.Closeable
+import java.io.IOException
+import java.net.DatagramPacket
+import java.net.DatagramSocket
+import java.net.Inet4Address
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.ServerSocket
+import java.net.Socket
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+
+/**
+ * 用 java.net 阻塞 I/O 执行 [SessionLogic] 给出的动作，安卓和电脑通用（不引用安卓类）。
+ *
+ * 线程：
+ * - 一个**协议线程**：会话的所有方法、全部写操作、事件回调都在这个线程上串行执行；
+ * - 每个监听、连接、UDP socket 一个线程：监听线程 accept 到连接后就接着当这条连接的读线程，
+ *   连接线程 connect 成功后同样接着读。读到的数据经队列交给协议线程。
+ *
+ * 读缓冲：每条连接固定几块缓冲轮流用，协议线程处理完一块才还回去，不为每次读另外分配或复制；
+ * 协议线程跟不上时读线程会停下来等，由 TCP 自己做流控，内存有上限。
+ *
+ * 关闭顺序：会话结束时自己会按层由上到下输出关闭动作（见 [ReceiverSession]），执行器照做；
+ * 之后协议线程再把还没关的资源按创建的反序关掉（正常情况下已经没有了），等所有线程退出，才算结束。
+ * [close] 先请会话正常收尾，超时（例如某次写被对端卡住）就从调用线程直接关掉全部 socket。
+ *
+ * 用法：`start()` 之后，用 [stop] 请求结束（非阻塞），[awaitTermination] 等结束；或者直接 [close]。
+ */
+class SocketRunner(
+    private val session: SessionLogic,
+    /** 会话事件，在协议线程上回调；回调里不要阻塞太久，抛出的异常只记日志。 */
+    private val events: (SessionEvent) -> Unit,
+    private val options: Options = Options(),
+) : Closeable {
+
+    class Options(
+        /** 主动连接的超时（毫秒）。 */
+        val connectTimeoutMillis: Int = 3_000,
+        /** 每块读缓冲的大小。 */
+        val readBufferBytes: Int = 64 * 1024,
+        /** 每条连接轮流使用的读缓冲块数。 */
+        val buffersPerConnection: Int = 2,
+        val listenBacklog: Int = 4,
+        /** [close] 等会话正常收尾的时间，以及收尾后等各线程退出的时间（毫秒）。 */
+        val stopGraceMillis: Long = 3_000,
+        /** 协议线程这么久没有推进就打印一次线程栈（毫秒）；<= 0 关闭。 */
+        val watchdogMillis: Long = 5_000,
+        /** 线程名前缀。 */
+        val threadName: String = "openhc-session",
+        /** 执行器自己的诊断日志（不含收发的内容）。 */
+        val log: (String) -> Unit = {},
+    ) {
+        init {
+            require(connectTimeoutMillis > 0) { "connectTimeoutMillis 必须为正" }
+            require(readBufferBytes >= 1024) { "readBufferBytes 至少 1024" }
+            require(buffersPerConnection >= 1) { "buffersPerConnection 至少 1" }
+            require(listenBacklog >= 1) { "listenBacklog 至少 1" }
+            require(stopGraceMillis > 0) { "stopGraceMillis 必须为正" }
+            require(watchdogMillis >= 0) { "watchdogMillis 不能为负" }
+        }
+    }
+
+    private sealed class Input {
+        class Accepted(val id: Int, val remoteHost: String) : Input()
+        class Connected(val id: Int) : Input()
+        class Data(val id: Int, val buffer: ByteArray, val length: Int, val pool: BufferPool) : Input()
+        class Datagram(val id: Int, val buffer: ByteArray, val length: Int, val pool: BufferPool) : Input()
+        class Closed(val id: Int) : Input()
+        class Failed(val id: Int, val message: String) : Input()
+        class Task(val block: (Long) -> List<SessionOutput>) : Input()
+        /** 只是把可能在等消息的协议线程叫醒，好让它先处理排队的交互输入（见 [submitInput]）。 */
+        object Wake : Input()
+        object Stop : Input()
+    }
+
+    /** 一条连接的读缓冲：固定几块轮流用。 */
+    private class BufferPool(count: Int, size: Int) {
+        private val free = ArrayBlockingQueue<ByteArray>(count)
+
+        init {
+            repeat(count) { free.add(ByteArray(size)) }
+        }
+
+        /** 等一块空闲缓冲；资源已关闭时返回 null。 */
+        fun take(closed: AtomicBoolean): ByteArray? {
+            while (!closed.get()) {
+                val buffer = try {
+                    free.poll(POOL_WAIT_MILLIS, TimeUnit.MILLISECONDS)
+                } catch (e: InterruptedException) {
+                    return null
+                }
+                if (buffer != null) return buffer
+            }
+            return null
+        }
+
+        fun give(buffer: ByteArray) {
+            free.offer(buffer)
+        }
+    }
+
+    private abstract class Resource(val id: Int) {
+        /** 先置位再关 socket：读线程据此知道异常是本机关闭造成的，不再上报。 */
+        val closed = AtomicBoolean(false)
+
+        fun close() {
+            if (closed.compareAndSet(false, true)) closeSocket()
+        }
+
+        protected abstract fun closeSocket()
+    }
+
+    private class ListenerResource(id: Int, val server: ServerSocket) : Resource(id) {
+        override fun closeSocket() = closeQuietly(server)
+    }
+
+    private class ConnectionResource(id: Int, val socket: Socket, buffers: Int, size: Int) : Resource(id) {
+        val pool = BufferPool(buffers, size)
+        override fun closeSocket() = closeQuietly(socket)
+    }
+
+    private class UdpResource(id: Int, val socket: DatagramSocket, buffers: Int, size: Int) : Resource(id) {
+        val pool = BufferPool(buffers, size)
+        override fun closeSocket() = closeQuietly(socket)
+    }
+
+    private val queue = LinkedBlockingQueue<Input>()
+
+    /**
+     * 交互输入（触摸）的优先队列：协议线程每轮先做这里的事，再处理 [queue] 里的收发。
+     * 手机会把一帧画面拆成几十个 UDP 包，关键帧一来 [queue] 里能堆一长串；触摸排在后面就会明显发滞。
+     */
+    private val inputQueue = LinkedBlockingQueue<(Long) -> List<SessionOutput>>()
+
+    /** 同步动作的结果（监听开好、写失败等），在当前这批动作执行完后、处理下一个外部输入之前交给会话。只在协议线程上用。 */
+    private val immediate = java.util.ArrayDeque<() -> List<SessionOutput>>()
+
+    private val lock = Any()
+    private val resources = LinkedHashMap<Int, Resource>()
+    private val threads = ArrayList<Thread>()
+    private var closingAll = false
+    private var started = false
+
+    @Volatile
+    private var loopThread: Thread? = null
+
+    /** 协议线程停顿检测的线程（[Options.watchdogMillis] > 0 才有）。 */
+    @Volatile
+    private var watchdog: Thread? = null
+
+    /** [close] 等不到正常收尾时置位：协议线程不再等会话结束，直接退出。 */
+    @Volatile
+    private var abandoned = false
+    private val terminated = CountDownLatch(1)
+
+    /** 协议线程当前在做的事（看门狗用，只写不读地推进）。 */
+    @Volatile
+    private var stage = "new"
+
+    /** 协议线程的推进计数（看门狗用）：每从一次等待里回来、每做完一次调用就自增。 */
+    @Volatile
+    private var progress = 0L
+
+    /** 上一次提示「定时任务没有推进」的时间（单线程访问）。 */
+    private var lastTickWarnAt = 0L
+
+    /** 协议线程因意外异常结束时的异常（会话自己的错误不算，那些以 [SessionEvent.Ended] 结束）。 */
+    @Volatile
+    var failure: Throwable? = null
+        private set
+
+    val isTerminated: Boolean get() = terminated.count == 0L
+
+    /** 启动协议线程；会话的 [SessionLogic.start] 在协议线程上调用。只能调用一次。 */
+    fun start() {
+        synchronized(lock) {
+            check(!started) { "start 只能调用一次" }
+            started = true
+        }
+        val thread = Thread({ runLoop() }, options.threadName)
+        thread.isDaemon = true
+        loopThread = thread
+        thread.start()
+        startWatchdog()
+    }
+
+    /** 请求本机结束会话（会话按协议收尾）。不阻塞，可以从任何线程调用、重复调用。 */
+    fun stop() {
+        queue.add(Input.Stop)
+    }
+
+    /** 在协议线程上执行 [task]（例如 `session.sendInput(…)`），执行它返回的动作。参数是当前单调时钟毫秒。 */
+    fun submit(task: (Long) -> List<SessionOutput>) {
+        queue.add(Input.Task(task))
+    }
+
+    /**
+     * 和 [submit] 一样在协议线程上执行，但排在普通收发之前（触摸这类需要即时响应的输入用）。
+     * 顺序按提交顺序保底；线程在等消息时会被叫醒。
+     */
+    fun submitInput(task: (Long) -> List<SessionOutput>) {
+        inputQueue.add(task)
+        queue.add(Input.Wake)
+    }
+
+    /** 等协议线程结束（全部资源已关闭、全部线程已退出）。 */
+    fun awaitTermination(timeoutMillis: Long): Boolean = terminated.await(timeoutMillis, TimeUnit.MILLISECONDS)
+
+    /**
+     * 结束并等待：先 [stop] 请会话正常收尾；[Options.stopGraceMillis] 内没结束，就从当前线程直接关掉全部 socket
+     * （卡住的写随之失败），再等一次。在协议线程上（例如事件回调里）调用时只请求结束、不等待。
+     */
+    override fun close() {
+        synchronized(lock) {
+            if (!started) {
+                started = true
+                terminated.countDown()
+                return
+            }
+        }
+        stop()
+        if (Thread.currentThread() === loopThread) return
+        if (awaitTermination(options.stopGraceMillis)) return
+        options.log("会话没有按时结束，强制关闭全部连接")
+        abandoned = true
+        val all = synchronized(lock) { resources.values.toList() }
+        for (resource in all) resource.close()
+        queue.add(Input.Stop)
+        if (!awaitTermination(options.stopGraceMillis)) options.log("强制关闭后协议线程仍未结束")
+    }
+
+    // ---------------- 协议线程 ----------------
+
+    private fun runLoop() {
+        try {
+            execute(session.start(now()))
+            drainImmediate()
+            while (!session.isEnded && !abandoned) {
+                stage = "poll"
+                val input = queue.poll(waitMillis(), TimeUnit.MILLISECONDS)
+                progress++
+                if (abandoned) break
+                // 交互输入先做：它排在所有收发之前，不会被一帧的几十个 UDP 包堵住。
+                drainInputs()
+                if (input != null) {
+                    dispatch(input)
+                    progress++
+                }
+                drainImmediate()
+                val due = session.nextTickAtMillis
+                if (!session.isEnded && due != null) {
+                    val now = now()
+                    if (now >= due) {
+                        execute(session.onTick(now))
+                        drainImmediate()
+                        holdIfTickNotAdvanced(now)
+                    }
+                }
+            }
+        } catch (t: Throwable) {
+            failure = t
+            options.log("协议线程意外结束：${describe(t)}")
+        } finally {
+            watchdog?.interrupt()
+            closeEverything()
+            joinThreads()
+            terminated.countDown()
+        }
+    }
+
+    private fun waitMillis(): Long {
+        val due = session.nextTickAtMillis ?: return IDLE_WAIT_MILLIS
+        // 至少等 1 毫秒：nextTickAtMillis 落在过去时（截止时间已过）不能变成零等待空转，
+        // 否则协议线程会持续分配、持续触发 GC，在 5.0 的 ART 上表现为整个应用卡死。
+        return (due - now()).coerceIn(1L, IDLE_WAIT_MILLIS)
+    }
+
+    /**
+     * [SessionLogic.onTick] 返回后 [SessionLogic.nextTickAtMillis] 仍在过去，说明会话没有推进截止时间。
+     * 这时退避一下并记一次日志（节流），既避免自旋，也把故障现场写进诊断日志。
+     */
+    private fun holdIfTickNotAdvanced(checkedAt: Long) {
+        if (session.isEnded || abandoned) return
+        val due = session.nextTickAtMillis ?: return
+        if (due > checkedAt) return
+        val current = now()
+        if (current - lastTickWarnAt >= TICK_WARN_INTERVAL_MILLIS) {
+            lastTickWarnAt = current
+            options.log("定时任务没有推进：nextTickAtMillis=$due，当前 $current")
+        }
+        try {
+            Thread.sleep(TICK_BACKOFF_MILLIS)
+        } catch (e: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
+    }
+
+    private fun dispatch(input: Input) {
+        stage = when (input) {
+            is Input.Accepted -> "onAccepted"
+            is Input.Connected -> "onConnected"
+            is Input.Data -> "onData"
+            is Input.Datagram -> "onDatagram"
+            is Input.Closed -> "onClosed"
+            is Input.Failed -> "onIoError"
+            is Input.Task -> "task"
+            Input.Wake -> "wake"
+            Input.Stop -> "stop"
+        }
+        when (input) {
+            is Input.Accepted -> execute(session.onAccepted(input.id, input.remoteHost, now()))
+            is Input.Connected -> execute(session.onConnected(input.id, now()))
+            is Input.Data -> {
+                val outputs = try {
+                    session.onData(input.id, input.buffer, 0, input.length, now())
+                } finally {
+                    input.pool.give(input.buffer)
+                }
+                execute(outputs)
+            }
+            is Input.Datagram -> {
+                val outputs = try {
+                    session.onDatagram(input.id, input.buffer, 0, input.length, now())
+                } finally {
+                    input.pool.give(input.buffer)
+                }
+                execute(outputs)
+            }
+            is Input.Closed -> execute(session.onClosed(input.id, now()))
+            is Input.Failed -> execute(session.onIoError(input.id, input.message, now()))
+            is Input.Task -> execute(input.block(now()))
+            Input.Wake -> Unit
+            Input.Stop -> execute(session.stop(now()))
+        }
+    }
+
+    /** 把排队的交互输入按提交顺序做完。 */
+    private fun drainInputs() {
+        while (true) {
+            val task = inputQueue.poll() ?: return
+            stage = "input"
+            execute(task(now()))
+            progress++
+            drainImmediate()
+        }
+    }
+
+    private fun drainImmediate() {
+        stage = "immediate"
+        var count = 0
+        while (immediate.isNotEmpty() && !session.isEnded && !abandoned) {
+            if (++count > MAX_IMMEDIATE) {
+                // 同步结果能自我增殖（例如某次回调又开了一个监听）：剩下的转投协议线程，不在这里无限跑。
+                options.log("同步结果超过 $MAX_IMMEDIATE 项，剩下的转投协议线程继续处理")
+                val rest = ArrayList<() -> List<SessionOutput>>(immediate)
+                immediate.clear()
+                queue.add(Input.Task { _ -> rest.flatMap { it() } })
+                return
+            }
+            execute(immediate.removeFirst().invoke())
+        }
+        immediate.clear()
+    }
+
+    private fun execute(outputs: List<SessionOutput>) {
+        stage = "execute"
+        for (output in outputs) {
+            when (output) {
+                is SessionAction.Listen -> listen(output)
+                is SessionAction.Connect -> connect(output)
+                is SessionAction.Write -> write(output)
+                is SessionAction.Close -> closeResource(output.id)
+                is SessionAction.OpenUdp -> openUdp(output)
+                is SessionAction.SendDatagram -> sendDatagram(output)
+                is SessionEvent -> deliver(output)
+            }
+        }
+    }
+
+    private fun deliver(event: SessionEvent) {
+        try {
+            events(event)
+        } catch (e: Exception) {
+            options.log("事件回调抛出异常（${describe(e)}），已忽略")
+        }
+    }
+
+    private fun listen(action: SessionAction.Listen) {
+        val server = ServerSocket()
+        try {
+            server.reuseAddress = true
+            server.bind(InetSocketAddress(InetAddress.getByName(action.host), action.port), options.listenBacklog)
+        } catch (e: IOException) {
+            closeQuietly(server)
+            val message = "在 ${action.host}:${action.port} 开监听失败：${describe(e)}"
+            immediate.add { session.onIoError(action.id, message, now()) }
+            return
+        }
+        val listener = ListenerResource(action.id, server)
+        val thread = newThread(action.channel, action.id) { acceptLoop(listener, action) }
+        if (!register(listener, thread)) {
+            closeQuietly(server)
+            return
+        }
+        thread.start()
+        val port = server.localPort
+        immediate.add { session.onListening(action.id, port, now()) }
+    }
+
+    private fun connect(action: SessionAction.Connect) {
+        val socket = Socket()
+        val connection = ConnectionResource(action.id, socket, options.buffersPerConnection, options.readBufferBytes)
+        val thread = newThread(action.channel, action.id) {
+            try {
+                socket.connect(InetSocketAddress(InetAddress.getByName(action.host), action.port), options.connectTimeoutMillis)
+            } catch (e: IOException) {
+                if (!connection.closed.get()) {
+                    post(Input.Failed(action.id, "连接 ${action.host}:${action.port} 失败：${describe(e)}"))
+                }
+                return@newThread
+            }
+            enableLowLatency(socket)
+            post(Input.Connected(action.id))
+            readLoop(connection)
+        }
+        if (!register(connection, thread)) {
+            closeQuietly(socket)
+            return
+        }
+        thread.start()
+    }
+
+    private fun write(action: SessionAction.Write) {
+        val connection = lookup(action.id) as? ConnectionResource ?: return
+        try {
+            connection.socket.getOutputStream().write(action.bytes)
+        } catch (e: IOException) {
+            if (!connection.closed.get()) {
+                val message = "写 ${action.bytes.size} 字节失败：${describe(e)}"
+                immediate.add { session.onIoError(action.id, message, now()) }
+            }
+        }
+    }
+
+    private fun openUdp(action: SessionAction.OpenUdp) {
+        var socket: DatagramSocket? = null
+        try {
+            socket = DatagramSocket(InetSocketAddress(InetAddress.getByName(action.localHost), 0))
+            socket.connect(InetSocketAddress(InetAddress.getByName(action.remoteHost), action.remotePort))
+        } catch (e: IOException) {
+            socket?.let { closeQuietly(it) }
+            val message = "开 UDP（${action.localHost} → ${action.remoteHost}:${action.remotePort}）失败：${describe(e)}"
+            immediate.add { session.onIoError(action.id, message, now()) }
+            return
+        }
+        val udp = UdpResource(action.id, socket, options.buffersPerConnection, options.readBufferBytes)
+        val thread = newThread(action.channel, action.id) { udpLoop(udp) }
+        if (!register(udp, thread)) {
+            closeQuietly(socket)
+            return
+        }
+        thread.start()
+    }
+
+    private fun sendDatagram(action: SessionAction.SendDatagram) {
+        val udp = lookup(action.id) as? UdpResource ?: return
+        try {
+            udp.socket.send(DatagramPacket(action.bytes, action.bytes.size))
+        } catch (e: IOException) {
+            if (!udp.closed.get()) {
+                val message = "发 UDP 数据报失败：${describe(e)}"
+                immediate.add { session.onIoError(action.id, message, now()) }
+            }
+        }
+    }
+
+    private fun closeResource(id: Int) {
+        val resource = synchronized(lock) { resources.remove(id) } ?: return
+        resource.close()
+    }
+
+    /** 协议线程退出前：把还没关的资源按创建的反序关掉，之后不再接受新资源。 */
+    private fun closeEverything() {
+        val remaining = synchronized(lock) {
+            closingAll = true
+            resources.values.toList().also { resources.clear() }
+        }
+        for (resource in remaining.asReversed()) resource.close()
+    }
+
+    private fun joinThreads() {
+        val all = synchronized(lock) { threads.toList() }
+        val deadline = now() + options.stopGraceMillis
+        for (thread in all) {
+            val left = deadline - now()
+            if (left > 0) {
+                try {
+                    thread.join(left)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return
+                }
+            }
+            if (thread.isAlive) options.log("线程 ${thread.name} 没能按时退出")
+        }
+    }
+
+    // ---------------- 看门狗 ----------------
+
+    /**
+     * 协议线程停顿检测：真机上拿不到 adb 时，靠这条日志定位「卡死」到底卡在哪个函数。
+     * 只有在 [Options.watchdogMillis] 内协议线程一点都没推进时才打印，同一次停顿只打一次。
+     */
+    private fun startWatchdog() {
+        if (options.watchdogMillis <= 0L) return
+        val thread = Thread({ watchdogLoop() }, "${options.threadName}-watchdog")
+        thread.isDaemon = true
+        watchdog = thread
+        thread.start()
+    }
+
+    private fun watchdogLoop() {
+        var lastProgress = progress
+        var reported = false
+        while (terminated.count > 0L) {
+            try {
+                Thread.sleep(options.watchdogMillis)
+            } catch (e: InterruptedException) {
+                return
+            }
+            if (terminated.count == 0L) return
+            val current = progress
+            if (current != lastProgress) {
+                lastProgress = current
+                reported = false
+                continue
+            }
+            if (reported) continue
+            reported = true
+            options.log("协议线程 ${options.watchdogMillis} 毫秒没有推进（阶段：$stage，进展：$current），线程栈：")
+            // 逐行交出去：logcat 对单条消息有长度上限，整段塞进去会被截断。
+            for (line in stackDump()) options.log(line)
+        }
+    }
+
+    /** 协议线程（含 main）的栈，写进诊断日志。 */
+    private fun stackDump(): List<String> {
+        val lines = ArrayList<String>()
+        for ((thread, trace) in Thread.getAllStackTraces()) {
+            val name = thread.name
+            if (name != "main" && !name.startsWith(options.threadName)) continue
+            lines += "线程 $name（${thread.state}）"
+            for (frame in trace) lines += "    at $frame"
+        }
+        return lines
+    }
+
+    // ---------------- 读线程 ----------------
+
+    private fun acceptLoop(listener: ListenerResource, action: SessionAction.Listen) {
+        val socket: Socket
+        try {
+            while (true) {
+                val candidate = listener.server.accept()
+                val local = candidate.localAddress?.hostAddress
+                if (action.requireLocalHost == null || local == action.requireLocalHost) {
+                    socket = candidate
+                    break
+                }
+                options.log("${action.channel.label}：本端地址不是 ${action.requireLocalHost} 的连接（经 $local），已关闭")
+                closeQuietly(candidate)
+            }
+        } catch (e: IOException) {
+            if (!listener.closed.get()) post(Input.Failed(action.id, "${action.channel.label}监听出错：${describe(e)}"))
+            return
+        }
+        val connection = ConnectionResource(action.acceptId, socket, options.buffersPerConnection, options.readBufferBytes)
+        if (!register(connection, null)) {
+            closeQuietly(socket)
+            return
+        }
+        enableLowLatency(socket)
+        val address = socket.inetAddress
+        val remote = (address as? Inet4Address)?.hostAddress ?: address?.hostAddress ?: ""
+        post(Input.Accepted(action.acceptId, remote))
+        readLoop(connection)
+    }
+
+    private fun readLoop(connection: ConnectionResource) {
+        val input = try {
+            connection.socket.getInputStream()
+        } catch (e: IOException) {
+            if (!connection.closed.get()) post(Input.Failed(connection.id, "取输入流失败：${describe(e)}"))
+            return
+        }
+        while (true) {
+            val buffer = connection.pool.take(connection.closed) ?: return
+            val n = try {
+                input.read(buffer)
+            } catch (e: IOException) {
+                connection.pool.give(buffer)
+                if (!connection.closed.get()) post(Input.Failed(connection.id, "读失败：${describe(e)}"))
+                return
+            }
+            if (n < 0) {
+                connection.pool.give(buffer)
+                if (!connection.closed.get()) post(Input.Closed(connection.id))
+                return
+            }
+            if (n == 0) {
+                connection.pool.give(buffer)
+                continue
+            }
+            post(Input.Data(connection.id, buffer, n, connection.pool))
+        }
+    }
+
+    private fun udpLoop(udp: UdpResource) {
+        while (true) {
+            val buffer = udp.pool.take(udp.closed) ?: return
+            val packet = DatagramPacket(buffer, buffer.size)
+            try {
+                udp.socket.receive(packet)
+            } catch (e: IOException) {
+                udp.pool.give(buffer)
+                if (!udp.closed.get()) post(Input.Failed(udp.id, "收 UDP 失败：${describe(e)}"))
+                return
+            }
+            post(Input.Datagram(udp.id, buffer, packet.length, udp.pool))
+        }
+    }
+
+    // ---------------- 工具 ----------------
+
+    private fun post(input: Input) {
+        queue.add(input)
+    }
+
+    /**
+     * 关掉 Nagle（TCP_NODELAY）：一次触摸在回控通道上只有几十字节，远端 ACK 没回来前 Nagle 会把后续的小包攒起来，
+     * 滑动就明显发滞（车机自建热点上尤其明显）。设置失败不影响功能，只记一行。
+     */
+    private fun enableLowLatency(socket: Socket) {
+        try {
+            socket.tcpNoDelay = true
+        } catch (e: IOException) {
+            options.log("设置 TCP_NODELAY 失败：${describe(e)}")
+        }
+    }
+
+    private fun lookup(id: Int): Resource? = synchronized(lock) { resources[id] }
+
+    /** 登记资源和它的线程；协议线程已经在退出时返回 false，调用方自己关掉 socket。 */
+    private fun register(resource: Resource, thread: Thread?): Boolean = synchronized(lock) {
+        if (closingAll) return false
+        resources[resource.id] = resource
+        if (thread != null) threads += thread
+        true
+    }
+
+    private fun newThread(channel: SessionChannel, id: Int, body: () -> Unit): Thread {
+        val thread = Thread(body, "${options.threadName}-${channel.name.lowercase()}-$id")
+        thread.isDaemon = true
+        return thread
+    }
+
+    private companion object {
+        /** 没有定时任务时协议线程最长等多久再看一眼。 */
+        const val IDLE_WAIT_MILLIS = 1_000L
+
+        /** 读线程等空闲缓冲时，每隔多久检查一次资源是否已关闭。 */
+        const val POOL_WAIT_MILLIS = 200L
+
+        /** 一轮里最多原地处理多少个同步结果，超出的转投协议线程。 */
+        const val MAX_IMMEDIATE = 1000
+
+        /** 「定时任务没有推进」这条日志的最短间隔。 */
+        const val TICK_WARN_INTERVAL_MILLIS = 10_000L
+
+        /** 定时任务没推进时退避多久，避免自旋。 */
+        const val TICK_BACKOFF_MILLIS = 5L
+
+        fun now(): Long = System.nanoTime() / 1_000_000L
+
+        fun describe(e: Throwable): String = e.javaClass.simpleName + (e.message?.let { "：$it" } ?: "")
+
+        fun closeQuietly(closeable: Closeable) {
+            try {
+                closeable.close()
+            } catch (e: IOException) {
+                // 关闭时的错误没有意义。
+            }
+        }
+
+        fun closeQuietly(socket: DatagramSocket) {
+            socket.close()
+        }
+    }
+}

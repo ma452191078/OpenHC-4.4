@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 首页重做（新设计图）新增文案；旧 strings_wireless*.xml 里行为绑定的文案继续复用 -->
+
+    <!-- 顶栏 -->
+    <string name="home2_subtitle">HiCar 连接助手</string>
+    <string name="home2_auto_on">自动连接已开启</string>
+    <string name="home2_auto_off">自动连接已关闭</string>
+
+    <!-- 左栏：模式选择 + 连接偏好 -->
+    <string name="home2_choose_mode">选择连接方式</string>
+    <string name="home2_mode_wireless">无线连接</string>
+    <string name="home2_mode_wireless_sub">推荐 · 扫码即连</string>
+    <string name="home2_mode_wired">有线连接</string>
+    <string name="home2_mode_wired_sub">USB 数据线</string>
+    <string name="home2_pref_section">连接偏好</string>
+    <string name="home2_pref_auto_title">自动连接手机</string>
+    <string name="home2_pref_auto_sub">首次配对后，上车自动恢复连接</string>
+
+    <!-- 配对与连接状态 -->
+    <string name="home2_pairing_scan">请用手机自带扫码功能扫码配对</string>
+    <string name="home2_waiting_connection">等待连接</string>
+    <string name="home2_connecting">正在连接</string>
+    <string name="home2_wired_connect_phone">请使用数据线连接手机</string>
+
+    <!-- 无线面板：标题 + 三步骤 + 插图说明 -->
+    <string name="home2_wireless_title">连接你的华为手机</string>
+    <string name="home2_wireless_step1">开始无线连接</string>
+    <string name="home2_wireless_step1_sub">点下方按钮生成二维码</string>
+    <string name="home2_wireless_step2">使用华为手机扫码</string>
+    <string name="home2_wireless_step2_sub">用相机或 HiCar 扫码</string>
+    <string name="home2_wireless_step3">在手机上确认连接</string>
+    <string name="home2_wireless_step3_sub">确认后自动进入 HiCar</string>
+    <string name="home2_wireless_art_caption">无线配对 · 无需数据线</string>
+    <string name="home2_wireless_idle_note">首次需扫码，之后上车自动连接</string>
+    <string name="home2_wireless_projecting">正在投屏</string>
+
+    <!-- 有线面板：标题 + 三步骤 + 插图说明 -->
+    <string name="home2_wired_title">用数据线连接华为手机</string>
+    <string name="home2_wired_step1">点「开始有线连接」</string>
+    <string name="home2_wired_step1_sub">准备 VPN 与 USB 监听</string>
+    <string name="home2_wired_step2">在系统弹窗点「允许」</string>
+    <string name="home2_wired_step2_sub">允许 OpenHC 建立 VPN</string>
+    <string name="home2_wired_step3">用数据线连接手机</string>
+    <string name="home2_wired_step3_sub">保持解锁并关闭 USB 调试</string>
+    <string name="home2_wired_art_caption">有线直连 · 无需 WiFi</string>
+    <string name="home2_wired_primary">开始有线连接</string>
+
+    <!-- 状态卡片：标题只说结论，具体原因与操作建议沿用对应 notice 文案 -->
+    <string name="home2_status_off_title">无线连接已关闭</string>
+    <string name="home2_problem_manual_address_title">二维码可能无法使用</string>
+    <string name="home2_problem_reinstall_title">应用需要重新安装</string>
+    <string name="home2_problem_bt_address_title">还差一步：填写蓝牙地址</string>
+    <string name="home2_problem_bt_unsupported_title">暂时无法使用无线连接</string>
+    <string name="home2_problem_bt_off_title">请打开车机蓝牙</string>
+    <string name="home2_problem_hotspot_title">当前系统不支持这种无线方式</string>
+    <string name="home2_problem_permission_title">需要连接权限</string>
+    <string name="home2_problem_wired_active_title">有线连接正在进行</string>
+    <string name="home2_problem_trust_title">配对记录需要处理</string>
+    <string name="home2_problem_start_title">连接未能启动</string>
+    <string name="home2_problem_ended_title">连接已断开</string>
+    <string name="home2_problem_stopped_title">连接已停止</string>
+    <string name="home2_problem_vpn_title">需要 VPN 授权</string>
+    <string name="home2_problem_vpn_unavailable_title">暂时无法使用有线连接</string>
+
+    <!-- 页脚遥测条 -->
+    <string name="home2_footer_version">OpenHC 版本 %1$s</string>
+    <string name="home2_telemetry_bt">蓝牙 %1$s</string>
+    <string name="home2_telemetry_screen">屏幕 %1$s</string>
+    <string name="home2_telemetry_mode">模式 %1$s</string>
+    <string name="home2_bt_on">ON</string>
+    <string name="home2_bt_off">OFF</string>
+
+    <!-- 设置页左导航 -->
+    <string name="settings_nav_audio">声音</string>
+    <string name="settings_nav_wireless">无线</string>
+    <string name="settings_nav_foot">GPL-3.0 · 不连任何服务器</string>
+
+    <!-- 投屏等待覆盖层与顶部信息 chip -->
+    <string name="projection_waiting_sub">%1$d×%2$d · %3$d fps</string>
+    <string name="projection_hud_wireless">无线投屏</string>
+    <string name="projection_hud_wired">有线投屏</string>
+    <string name="projection_hud_format">%1$s · %2$d×%3$d · %4$d fps</string>
+</resources>

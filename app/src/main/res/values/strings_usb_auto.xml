@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 设置页：启用有线连接（默认关） -->
+    <string name="settings_wired_enabled">启用有线连接</string>
+    <string name="settings_wired_enabled_hint">关闭时只显示无线连接。开启后首页可选择有线 / 无线，插线也能直接拉起连接。</string>
+
+    <!-- 设置页：插线时不再弹窗（含插线就连） -->
+    <string name="settings_usb_auto">插线时不再弹窗</string>
+    <string name="settings_usb_auto_hint_off">关着：每次连接需在系统弹框点两次「确定」，插线也不会自动打开。打开后首次插手机时勾选「默认使用」再确定，以后插线自动打开并连接。</string>
+    <string name="settings_usb_auto_hint_on">首次插手机时勾选「默认使用」再确定，切换连接方式后再勾选一次；之后插上即自动打开并连接。换手机需重新勾选。首次未连上请拔线等 5 秒再插。开启时插上华为、荣耀手机（含仅充电）都会打开 OpenHC。</string>
+</resources>

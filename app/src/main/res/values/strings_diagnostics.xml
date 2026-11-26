@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 设置 → 诊断 -->
+    <string name="settings_group_diagnostics">诊断</string>
+    <string name="settings_diag_export">导出诊断日志</string>
+    <string name="settings_diag_export_hint">把最近运行记录导出为文本（安卓 10 起保存在「下载/OpenHC」），报告问题时附上。仅含 OpenHC 日志，不含连接密钥和 WiFi 密码，地址只保留首尾。</string>
+    <string name="settings_diag_export_button">导出</string>
+    <string name="settings_diag_exporting">正在导出…</string>
+    <string name="settings_diag_saved">已保存：%1$s。报告问题时请附上该文件（可拷到 U 盘再上传）。</string>
+    <string name="settings_diag_failed">没导出来：%1$s</string>
+</resources>

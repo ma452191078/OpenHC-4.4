@@ -1,0 +1,40 @@
+[versions]
+# 安卓模块统一的 SDK 版本。4.4 fork：minSdk 19 = 安卓 4.4；无线等功能在 4.4 上整体不可用，
+# 有线链路里个别 API 差异在运行时按系统版本判断处理。
+compileSdk = "36"
+targetSdk = "36"
+minSdk = "19"
+agp = "8.11.1"
+kotlin = "2.1.20"
+coroutines = "1.10.2"
+serialization = "1.8.1"
+# 4.4 fork：androidx.core 1.12.0 仍是 minSdk 14 世代（2023-10 之后各 AndroidX 库才整体升到 19，
+# core 1.15 起要求 21）。只用 ContextCompat/NotificationCompat 等纯兼容工具，不用任何 21+ 的 API。
+coreKtx = "1.12.0"
+multidex = "2.0.1"
+junit = "4.13.2"
+bouncycastle = "1.79"
+# 5.0 无线恢复：配对二维码生成用（zxing-core 纯 Java 无 API 门槛，上游本来就有）。
+zxing = "3.5.3"
+animalsniffer = "2.0.1"
+# 核心模块要能跑在安卓 4.4 上：用安卓 API 19 签名检查有没有误用新版 JDK 接口。
+androidApi19Signature = "4.4.2_r4"
+
+[libraries]
+kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
+bouncycastle-prov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+# 5.0 无线恢复：配对二维码（QR_CODE，纠错 M），坐标 com.google.zxing:core。
+zxing = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-multidex = { group = "androidx.multidex", name = "multidex", version.ref = "multidex" }
+kotlin-test = { group = "org.jetbrains.kotlin", name = "kotlin-test", version.ref = "kotlin" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+android-api19-signature = { group = "net.sf.androidscents.signature", name = "android-api-level-19", version.ref = "androidApi19Signature" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+animalsniffer = { id = "ru.vyarus.animalsniffer", version.ref = "animalsniffer" }

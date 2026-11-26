@@ -1,0 +1,20 @@
+name: 构建与测试
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 拒绝提交凭据（见 SECURITY.md）
+        run: python3 tools/check_public_tree.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: 检查并构建调试包
+        run: ./gradlew --console=plain check assembleDebug

@@ -1,0 +1,58 @@
+package io.github.gcbond.openhc.diagnostics
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class DiagnosticsReportTest {
+
+    @Test
+    fun fileNameCarriesTheTime() {
+        assertEquals("openhc-diagnostics-20261122-201530.txt", DiagnosticsReport.fileName("20261122-201530"))
+    }
+
+    @Test
+    fun headerListsEveryFactAndSaysWhatIsLeftOut() {
+        val header = DiagnosticsReport.header(listOf("OpenHC" to "0.2.0（200，release）", "固件" to ""))
+        assertTrue(header.startsWith("OpenHC 诊断日志\n"))
+        assertTrue("不含连接密钥和 WiFi 密码" in header)
+        assertTrue("OpenHC：0.2.0（200，release）\n" in header)
+        assertTrue("固件：（空）\n" in header, "空值写明是空的，免得以为漏了")
+    }
+
+    @Test
+    fun fullAddressesKeepOnlyTheEnds() {
+        assertEquals(
+            "BluetoothSocket: connect to 3C:**:**:**:9A:0B, ok",
+            DiagnosticsReport.redact("BluetoothSocket: connect to 3C:4D:5E:6F:9A:0B, ok"),
+        )
+        assertEquals("device 3c:**:**:**:9a:0b: bonded", DiagnosticsReport.redact("device 3c:4d:5e:6f:9a:0b: bonded"))
+        assertEquals("a=10:**:**:**:50:60 b=aa:**:**:**:ee:ff", DiagnosticsReport.redact("a=10:20:30:40:50:60 b=aa:bb:cc:dd:ee:ff"))
+    }
+
+    @Test
+    fun placeholdersMaskedAddressesAndOtherNumbersStay() {
+        val untouched = listOf(
+            "BSSID 02:00:00:00:00:00（占位）",
+            "BSSID 0a:**:**:**:4e:5f",
+            "01-02 03:04:05.678  4321  4400 I OpenHC-Wireless: [1] 192.168.0.1，2437 MHz",
+            "fe80::1:2:3:4:5:6",
+            "1a:2b:3c:4d:5e:6f:70",
+        )
+        for (line in untouched) assertEquals(line, DiagnosticsReport.redact(line))
+    }
+
+    @Test
+    fun onlyLinesOfOurOwnProcessAreKept() {
+        assertTrue(DiagnosticsReport.fromProcess("01-02 03:04:05.678  4321  4400 I OpenHC-Wireless: [1] 开始", "4321"))
+        assertFalse(DiagnosticsReport.fromProcess("01-02 03:04:05.678  1234  1250 D SomeOtherApp: 别人的日志", "4321"))
+        assertFalse(DiagnosticsReport.fromProcess("01-02 03:04:05.678 43210  4400 I X: 进程号只是开头相同", "4321"))
+        assertTrue(DiagnosticsReport.fromProcess("--------- beginning of main", "4321"))
+    }
+
+    @Test
+    fun sectionTitlesStandOut() {
+        assertEquals("\n===== 运行日志 =====\n", DiagnosticsReport.section("运行日志"))
+    }
+}
