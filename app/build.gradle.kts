@@ -46,8 +46,8 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         multiDexEnabled = true
         // versionCode = 主版本 × 10000 + 次版本 × 100 + 补丁号。
-        versionCode = 201
-        versionName = "0.2.1"
+        versionCode = 1
+        versionName = "0.0.1"
     }
 
     sourceSets {
@@ -135,10 +135,12 @@ android.applicationVariants.all {
     val cap = variantName.replaceFirstChar { it.uppercaseChar() }
     val apks = outputs.map { it.outputFile }
     val versionName = android.defaultConfig.versionName ?: "dev"
+    // release 用 openhc-android4.4-<版本>.apk；debug 加 -debug 后缀，避免和 release 同名互相覆盖。
+    val apkSuffix = if (variantName == "release") "" else "-$variantName"
     val copyTask = tasks.register("copy${cap}ApkToDist", Copy::class) {
         from(apks)
         into(distDir)
-        rename { "openhc-$versionName-android4.4-wireless-identity-$variantName.apk" }
+        rename { "openhc-android4.4-$versionName$apkSuffix.apk" }
     }
     tasks.named("assemble$cap").configure { finalizedBy(copyTask) }
 }
