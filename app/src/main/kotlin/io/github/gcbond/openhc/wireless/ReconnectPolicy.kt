@@ -139,6 +139,19 @@ internal class ReconnectTriggers(private val cooldownMillis: Long = DEFAULT_COOL
         dialedThisConnection.remove(key(address))
     }
 
+    /**
+     * 轮询兜底发现手机蓝牙刚连上（系统广播没到或被拦时，[BluetoothLinkState] 定时读到链路变成连着）。
+     * 和 [onBluetoothConnected] 的区别：这是同一条已经存在的连接，不能再清「这次蓝牙连接里拨过」——
+     * 用户点过停止、或这次已经拨过一次的，轮询不能把状态清掉重拨。
+     */
+    fun onPolledConnected(address: String, knownPhones: Set<String>, nowMillis: Long): Decision {
+        val key = key(address)
+        if (knownPhones.none { key(it) == key }) return Decision.Skip("不是用无线连成功过的手机")
+        if (key in dialedThisConnection) return Decision.Skip("这次蓝牙连接里已经拨过")
+        coolingDown(key, nowMillis)?.let { return Decision.Skip(it) }
+        return Decision.Dial(key)
+    }
+
     fun onUiShown(lastPhone: String?, knownPhones: Set<String>, nowMillis: Long): Decision {
         val key = lastPhone?.let(::key) ?: return Decision.Skip("还没有用无线连成功过的手机")
         if (knownPhones.none { key(it) == key }) return Decision.Skip("最近那台手机不在记录里")

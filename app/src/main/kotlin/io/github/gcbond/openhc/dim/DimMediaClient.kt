@@ -26,7 +26,13 @@ data class DimMediaInfo(
     val positionMs: Long = 0L,
     val playing: Boolean = true,
     val coverPath: String? = null,
-)
+    /** 音源类型：0 本地 / 1 USB / 2 蓝牙 / 3 FM / 4 AM / 5 AUX / 6 在线 / 7 USB2 / 8 播客。 */
+    val mediaType: Int = MEDIA_TYPE_ONLINE,
+) {
+    companion object {
+        const val MEDIA_TYPE_ONLINE = 6
+    }
+}
 
 /**
  * 仪表盘多媒体信息投放（ECARX DiServer）。
@@ -125,8 +131,6 @@ class DimMediaClient(context: Context) {
         }
         mediaDI = di
         try {
-            di.updateMediaSourceList(intArrayOf(MEDIA_TYPE_ONLINE))
-            di.updateCurrentSourceType(MEDIA_TYPE_ONLINE)
             registerListener()
             pending?.let { push(it) }
             Log.i(TAG, "仪表盘媒体通道已连上")
@@ -172,7 +176,7 @@ class DimMediaClient(context: Context) {
         if (signature != lastSignature) {
             lastSignature = signature
             val media = Media().apply {
-                baseMediaType = MEDIA_TYPE_ONLINE
+                baseMediaType = info.mediaType
                 basePlayState = if (info.playing) 1 else 0
                 baseCurrentTime = info.positionMs
                 baseTotalTime = info.durationMs
@@ -182,12 +186,11 @@ class DimMediaClient(context: Context) {
                 albumName9 = info.album
                 songTitle10 = info.title
                 artistName11 = info.artist
-                sourceIcon17 = MEDIA_TYPE_ONLINE
+                sourceIcon17 = info.mediaType
             }
             try {
-                // 音源菜单是各播放应用共用的，工厂应用可能会覆盖；换歌时顺手重新声明一次「在线」音源。
-                di.updateMediaSourceList(intArrayOf(MEDIA_TYPE_ONLINE))
-                di.updateCurrentSourceType(MEDIA_TYPE_ONLINE)
+                // 只在真要显示媒体信息时才动仪表；不声明音源菜单、不切当前音源，
+                // 免得把车机自己的蓝牙音乐/多媒体显示顶掉（4.4 车机上这两项本来就能在仪表显示歌名）。
                 di.updateMediaInfo(media)
                 Log.i(TAG, "仪表盘媒体信息已更新：${info.title} - ${info.artist}")
             } catch (t: Throwable) {
@@ -208,8 +211,5 @@ class DimMediaClient(context: Context) {
         const val SERVICE_CLASS = "com.ecarx.dim_interaction.server.DiServer"
         const val EXTRA_APP_TYPE = "app_type"
         const val APP_TYPE_MEDIA = "com.ecarx.media_center"
-
-        /** 媒体类型：6 = 在线。 */
-        const val MEDIA_TYPE_ONLINE = 6
     }
 }

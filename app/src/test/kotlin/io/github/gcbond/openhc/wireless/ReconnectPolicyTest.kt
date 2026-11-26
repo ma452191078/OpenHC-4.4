@@ -82,8 +82,24 @@ class ReconnectPolicyTest {
     }
 
     @Test
-    fun aDialThatNeverStartedLeavesNoTrace() {
-        // 问了、但没拨成（例如界面没出来）：不占冷却、不算这次拨过，补上条件后马上还能拨。
+    fun polledConnectDialsOnceButNeverResetsTheOnceOnlyLock() {
+        val t = ReconnectTriggers(cooldownMillis = 1_000)
+        // 轮询第一次发现连上：拨。
+        assertEquals(Decision.Dial(phone), t.dialNow(t.onPolledConnected(phone, known, 0), 0))
+        // 同一条连接上继续轮询到「还连着」：冷却过后也不再拨。
+        assertIs<Decision.Skip>(t.onPolledConnected(phone, known, 5_000))
+        // 只认记录里的手机。
+        assertIs<Decision.Skip>(t.onPolledConnected(other, known, 5_000))
+        // 用户停止后同样不再拨（轮询不能清掉「这次蓝牙连接里拨过」）。
+        t.onSessionEnded(phone, projected = true, stoppedByUser = true)
+        assertIs<Decision.Skip>(t.onPolledConnected(phone, known, 9_000))
+        // 蓝牙断开又连上：新的一次，轮询可以拨。
+        t.onBluetoothDisconnected(phone)
+        assertEquals(Decision.Dial(phone), t.dialNow(t.onPolledConnected(phone, known, 20_000), 20_000))
+    }
+
+    @Test
+    fun aDialThatNeverStartedLeavesNoTrace() {        // 问了、但没拨成（例如界面没出来）：不占冷却、不算这次拨过，补上条件后马上还能拨。
         val t = ReconnectTriggers(cooldownMillis = 60_000)
         assertEquals(Decision.Dial(phone), t.onUiShown(phone, known, 0))
         assertEquals(Decision.Dial(phone), t.onUiShown(phone, known, 5_000))

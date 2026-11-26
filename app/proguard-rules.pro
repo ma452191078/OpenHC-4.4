@@ -15,6 +15,14 @@
 # 被裁掉的 BC 类里还有对 javax/OSGi 等非安卓类的引用，关闭相关缺失告警。
 -dontwarn org.bouncycastle.**
 
+# 应用内更新：安卓 4.4 上用 BC 的 JSSE 连 GitHub。Provider 内部是按类名注册/加载协议实现和套件的，
+# 这些类没有直接引用，R8 看不见，必须保留。
+-keep class org.bouncycastle.jsse.** { *; }
+-keep class org.bouncycastle.tls.** { *; }
+-keep class org.bouncycastle.util.** { *; }
+# JSSE 通过 JCA 按名字取摘要/加解密/MAC/签名实现（SHA-512、AES-GCM、HmacSHA256 等），整包保留。
+-keep class org.bouncycastle.jcajce.provider.** { *; }
+
 # kotlinx.serialization：只用 JsonElement 的解析/输出（直接引用 serializer，没有 @Serializable
 # 反射序列化），但运行时内部会按名字查找伴生对象，保留这些成员。
 -keepclassmembers class kotlinx.serialization.json.** {

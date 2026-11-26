@@ -24,6 +24,8 @@ androidApi19Signature = "4.4.2_r4"
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "coroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 bouncycastle-prov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncycastle" }
+# 应用内更新：安卓 4.4 的平台 TLS 只有 CBC 套件，连不上 GitHub（只收 AEAD），用 BC 的纯 Java JSSE 补上。
+bouncycastle-tls = { group = "org.bouncycastle", name = "bctls-jdk18on", version.ref = "bouncycastle" }
 # 5.0 无线恢复：配对二维码（QR_CODE，纠错 M），坐标 com.google.zxing:core。
 zxing = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

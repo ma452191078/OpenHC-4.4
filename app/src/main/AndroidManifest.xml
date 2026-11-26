@@ -4,6 +4,11 @@
 
     <!-- 和手机之间的 TCP/UDP（经 USB 网卡）。 -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!--
+        应用内更新：从 GitHub Releases 下载新版安装包后交给系统安装器。
+        安卓 8 起装 APK 要用户额外授权「安装未知应用」，这条权限只用来声明意图，实际开关在系统设置里。
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- 4.4 fork：5.0 及以下把运行日志和诊断报告写进公共「下载/OpenHC」文件夹，靠这条安装时授予，不用运行时申请。 -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
@@ -151,6 +156,17 @@
             android:name=".wireless.WirelessService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+
+        <!-- 应用内更新：安卓 7 起把下载好的安装包以 content:// 交给系统安装器（4.4 上仍用 file://）。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/update_file_paths" />
+        </provider>
 
         <!--
             5.0 无线恢复：手机蓝牙连上/断开车机时触发一次无线回连。默认停用（偏离上游：上游清单写 enabled=true，

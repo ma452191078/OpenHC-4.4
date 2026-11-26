@@ -7,7 +7,7 @@
 | Kotlin 标准库 | JetBrains | Apache-2.0 |
 | kotlinx.serialization | JetBrains | Apache-2.0 |
 | AndroidX、Jetpack Compose | Android 开源项目 | Apache-2.0 |
-| Bouncy Castle（bcprov-jdk18on，只用轻量级 API 做 X25519、Ed25519） | The Legion of the Bouncy Castle Inc. | MIT 风格的 Bouncy Castle 许可，原文见 [licenses/BouncyCastle.txt](licenses/BouncyCastle.txt) |
+| Bouncy Castle（bcprov-jdk18on，只用轻量级 API 做 X25519、Ed25519；bctls-jdk18on 提供安卓 4.4 上的 TLS 1.2/1.3 套件与内置根证书，用于应用内更新） | The Legion of the Bouncy Castle Inc. | MIT 风格的 Bouncy Castle 许可，原文见 [licenses/BouncyCastle.txt](licenses/BouncyCastle.txt) |
 | ZXing core（com.google.zxing:core，无线连接页生成配对二维码） | ZXing authors | Apache-2.0，原文见 [licenses/Apache-2.0.txt](licenses/Apache-2.0.txt) |
 
 ## 只在构建或测试时使用（不进安装包）

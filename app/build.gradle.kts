@@ -117,6 +117,8 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     // 5.0 无线恢复：配对二维码。zxing-core 纯 Java 无 API 门槛，上游本来就有，fork UI 重写时被删。
     implementation(libs.zxing)
+    // 应用内更新：安卓 4.4 的平台 TLS 只有 CBC 套件，GitHub 只收 AEAD；用 BC 的纯 Java JSSE 握手。
+    implementation(libs.bouncycastle.tls)
 
     // 4.4 fork：androidx.core 用仍支持 minSdk 19 的版本（见 libs.versions.toml），
     // 只用 ContextCompat/NotificationCompat 这类纯兼容工具，不用 21+ 的 API。

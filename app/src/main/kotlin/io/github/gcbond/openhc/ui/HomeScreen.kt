@@ -53,6 +53,8 @@ internal class HomeActions(
     val onGrantVpn: () -> Unit,
     val onResetTrustStore: () -> Unit,
     val onWirelessStart: () -> Unit,
+    /** 二维码页上的「开始连接」：主动拨最近连成功过的手机。 */
+    val onWirelessReconnect: () -> Unit,
     val onWirelessStop: () -> Unit,
     /** 进入有线首页：自动走权限、VPN 和有线连接启动链。 */
     val onWiredStart: () -> Unit,
@@ -720,18 +722,14 @@ internal class HomeScreen(
         if (sig == lastWirelessSig) return
         lastWirelessSig = sig
 
-        val knownPhone = wirelessPreferences.knownPhoneList.isNotEmpty()
-        val waitingForPairedPhone = knownPhone && !state.phoneConnected && state.notice == null &&
-            (state.autoReconnect || phase == WirelessPhase.IDLE)
-
         parts.body.removeAllViews()
         when {
+            // 等扫码时二维码优先：提示（上一步失败的原因等）作为卡片附在二维码下方，不遮挡扫码入口。
+            phase == WirelessPhase.WAITING_FOR_SCAN && state.qrCode != null -> addScanContent(parts, state)
             !wirelessOff && state.notice != null -> {
                 addWirelessNoticeCard(parts.body, state.notice!!, 0f)
                 setNote(parts, "")
             }
-            waitingForPairedPhone -> addWirelessWaiting(parts)
-            phase == WirelessPhase.WAITING_FOR_SCAN && state.qrCode != null -> addScanContent(parts, state)
             phase == WirelessPhase.IDLE && !wirelessOff -> addWirelessIdle(parts)
             else -> addWirelessStatus(parts, state, wirelessOff)
         }
@@ -846,21 +844,15 @@ internal class HomeScreen(
         }
     }
 
-    /** 已配对：只显示无线图标和等待文本，二维码由用户主动打开。 */
-    private fun addWirelessWaiting(parts: PanelParts) {
+    /** 空闲：给无线图标和提示，点下方按钮会进入二维码页。 */
+    private fun addWirelessIdle(parts: PanelParts) {
         addCenteredStatus(
             parts,
-            context.getString(R.string.home2_waiting_connection),
-            "",
+            context.getString(R.string.home2_mode_wireless),
+            context.getString(R.string.home2_wireless_idle_hint),
             StateTone.INFO,
             iconAsset = "icons/connection_wireless.svg",
         )
-        setNote(parts, "")
-    }
-
-    /** 首次启动状态尚未到时先给加载反馈，自动流程会直接进入二维码。 */
-    private fun addWirelessIdle(parts: PanelParts) {
-        addCenteredStatus(parts, context.getString(R.string.home2_connecting), "", StateTone.PROGRESS, loading = true)
         setNote(parts, "")
     }
 
@@ -1277,20 +1269,18 @@ internal class HomeScreen(
     private fun wirelessButtonList(state: WirelessUiState, wirelessOff: Boolean): List<HomeButton> {
         val phase = state.phase
         val startEnabled = identity is IdentityLoader.Result.Loaded
-        val waitingForPairedPhone = wirelessPreferences.knownPhoneList.isNotEmpty() && !state.phoneConnected &&
-            state.notice == null && (state.autoReconnect || phase == WirelessPhase.IDLE)
         return when {
             wirelessOff -> listOf(
                 button(R.string.wireless_action_open_settings) { onOpenSettings() },
             )
-            waitingForPairedPhone -> buildList {
-                if (phase != WirelessPhase.IDLE) {
-                    add(
-                        button(R.string.action_stop, primary = false, enabled = phase != WirelessPhase.STOPPING) {
-                            actions.onWirelessStop()
-                        },
-                    )
-                }
+            // 二维码页：连成功过手机时多给一个「开始连接」，车主不用扫码也能让车机主动拨它。
+            phase == WirelessPhase.WAITING_FOR_SCAN && wirelessPreferences.knownPhoneList.isNotEmpty() -> buildList {
+                add(button(R.string.wireless_action_start) { actions.onWirelessReconnect() })
+                add(
+                    button(R.string.action_stop, primary = false, enabled = phase != WirelessPhase.STOPPING) {
+                        actions.onWirelessStop()
+                    },
+                )
             }
             phase != WirelessPhase.IDLE -> buildList {
                 if (phase == WirelessPhase.PROJECTING) {

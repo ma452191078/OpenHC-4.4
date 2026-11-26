@@ -2,6 +2,7 @@
 .idea/
 *.iml
 .vscode/
+bin/
 
 # Gradle / Kotlin
 .gradle/
@@ -36,4 +37,12 @@ release-signing.properties
 captures/
 
 # 连接参数不进仓库：构建时从本机目录注入（见 app/build.gradle.kts）
+identity/
 /app/src/main/assets/openhc-identity.json
+
+# 本地工具产物、截图、参考资料与交付包：不进仓库
+.hallmark/
+.screenshots/
+.trae-html-share-packages/
+car-apps/
+dist/

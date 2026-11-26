@@ -11,14 +11,10 @@ package io.github.gcbond.openhc.wireless
  *
  * 安卓 12、12L 上精确位置要和大致位置一起申请，系统框里才能选「精确」；只给大致位置不够用。
  * 通知权限（安卓 13 起）只是让前台服务的通知显示出来，拒绝了照样连接，不算必须。
- *
- * 「无线自动回连」开着时，安卓 12 起还要「附近的设备」里的广播权限（BLUETOOTH_ADVERTISE，见 [advertise]）。它不算必须：
- * 用户点开始时一起申请，拒绝了照样能扫码连接，只是不发广播、不能自动回连。更早的版本发广播用清单里的普通蓝牙权限。
  */
 object WirelessPermissions {
     // 直接写权限名：新版本才有的常量引用在老版本上会被 lint 当成新接口提示，值本身只是字符串。
     const val BLUETOOTH_CONNECT = "android.permission.BLUETOOTH_CONNECT"
-    const val BLUETOOTH_ADVERTISE = "android.permission.BLUETOOTH_ADVERTISE"
     const val NEARBY_WIFI_DEVICES = "android.permission.NEARBY_WIFI_DEVICES"
     const val FINE_LOCATION = "android.permission.ACCESS_FINE_LOCATION"
     const val COARSE_LOCATION = "android.permission.ACCESS_COARSE_LOCATION"
@@ -38,17 +34,12 @@ object WirelessPermissions {
     /** 还缺的必须权限。 */
     fun missing(sdkInt: Int, granted: (String) -> Boolean): List<String> = required(sdkInt).filterNot(granted)
 
-    /** 发 BLE 广播要的运行时权限（安卓 12 起才有，更早为空）。 */
-    fun advertise(sdkInt: Int): List<String> = if (sdkInt >= S) listOf(BLUETOOTH_ADVERTISE) else emptyList()
-
     /**
-     * 一次系统框里要申请的：必须的、安卓 12/12L 上配套的大致位置，以及（还没问过时）通知权限；
-     * [advertise] 为 true（开着无线自动回连）时再加上广播权限。
+     * 一次系统框里要申请的：必须的、安卓 12/12L 上配套的大致位置，以及（还没问过时）通知权限。
      */
-    fun toRequest(sdkInt: Int, askNotifications: Boolean, advertise: Boolean = false): List<String> {
+    fun toRequest(sdkInt: Int, askNotifications: Boolean): List<String> {
         val list = ArrayList(required(sdkInt))
         if (sdkInt in S until TIRAMISU) list += COARSE_LOCATION
-        if (advertise) list += advertise(sdkInt)
         if (askNotifications && sdkInt >= TIRAMISU) list += POST_NOTIFICATIONS
         return list
     }

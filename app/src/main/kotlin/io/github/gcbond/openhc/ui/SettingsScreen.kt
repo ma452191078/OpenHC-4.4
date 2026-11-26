@@ -35,8 +35,8 @@ internal class SettingsScreen(
     private val onBack: () -> Unit,
 ) : LinearLayout(context), SectionHost {
 
-    /** 左导航的六个段。 */
-    private enum class Nav { PICTURE, AUDIO, WIRELESS, BOOT, CONNECTION, DIAG }
+    /** 左导航的七个段。 */
+    private enum class Nav { PICTURE, AUDIO, WIRELESS, BOOT, CONNECTION, UPDATE, DIAG }
 
     private val settings = AppSettings(context)
     private val host = ActivitySectionHost(context as Activity)
@@ -50,6 +50,7 @@ internal class SettingsScreen(
     private var wireless: WirelessSection? = null
     private var boot: BootStartSection? = null
     private var usbAutoConnect: UsbAutoConnectGroup? = null
+    private var update: UpdateSection? = null
     private var diagnostics: DiagnosticsSection? = null
 
     private lateinit var body: LinearLayout
@@ -142,6 +143,7 @@ internal class SettingsScreen(
         wireless = null
         boot = null
         usbAutoConnect = null
+        update = null
         diagnostics = null
         when (nav) {
             Nav.PICTURE -> {
@@ -170,6 +172,11 @@ internal class SettingsScreen(
                 usbAutoConnect = group
                 content.addView(group, sectionParams(0f))
             }
+            Nav.UPDATE -> {
+                val section = UpdateSection(context)
+                update = section
+                content.addView(section, sectionParams(0f))
+            }
             Nav.DIAG -> {
                 val section = DiagnosticsSection(context)
                 diagnostics = section
@@ -190,6 +197,7 @@ internal class SettingsScreen(
             add(Triple(Nav.BOOT, context.getString(R.string.settings_boot_title), "icons/nav_boot.svg"))
             // 「连接方式」：里面有「启用有线连接」开关，默认关；关着时分组里只剩这个开关。
             add(Triple(Nav.CONNECTION, context.getString(R.string.settings_group_connection), "icons/nav_connection.svg"))
+            add(Triple(Nav.UPDATE, context.getString(R.string.settings_nav_update), "icons/nav_update.svg"))
             add(Triple(Nav.DIAG, context.getString(R.string.settings_group_diagnostics), "icons/nav_diag.svg"))
         }
         items.forEachIndexed { index, (nav, label, iconPath) ->

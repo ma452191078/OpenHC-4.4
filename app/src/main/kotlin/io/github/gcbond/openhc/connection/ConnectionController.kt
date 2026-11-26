@@ -225,10 +225,19 @@ class ConnectionController(context: Context) {
         }
     }
 
+    /**
+     * 调试探针：在当前的设备控制连接上发一条 `$` 记录（例如 HiCar 元数据请求 dataType=514）。
+     * 没有连接、设备控制连接还没加密时什么都不做。任意线程可调。
+     */
+    fun sendDeviceData(module: Long, type: Int, data: ByteArray) {
+        val current = inputTarget ?: return
+        Log.i(TAG, "发送设备数据：module=$module type=$type ${data.size} 字节")
+        current.runner.submit { current.session.sendDeviceData(module, type, data) }
+    }
+
     fun addHostListener(listener: HostListener) {
         hostListeners += listener
     }
-
     fun removeHostListener(listener: HostListener) {
         hostListeners -= listener
     }

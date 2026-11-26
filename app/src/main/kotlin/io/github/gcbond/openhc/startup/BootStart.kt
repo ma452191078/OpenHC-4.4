@@ -79,13 +79,13 @@ internal object BootStart {
     /** 开机静默连接真的起作用：开机自动打开也开着（开机广播接收器启用着）。 */
     fun silentEffective(context: Context): Boolean = isSilent(context) && isEnabled(context)
 
-    /** 无线等回连要的运行时权限都有（开始无线连接必须的，加上发 BLE 广播的）。 */
+    /** 无线连接要的运行时权限都有（不再需要 BLE 广播权限）。 */
     fun wirelessPermissionsGranted(context: Context): Boolean {
         val sdk = Build.VERSION.SDK_INT
         val granted = { permission: String ->
             ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
         }
-        return WirelessPermissions.missing(sdk, granted).isEmpty() && WirelessPermissions.advertise(sdk).all(granted)
+        return WirelessPermissions.missing(sdk, granted).isEmpty()
     }
 
     /** 开机打开界面以后要不要进入等插线，见 [BootStartPolicy.waitForCable]。 */

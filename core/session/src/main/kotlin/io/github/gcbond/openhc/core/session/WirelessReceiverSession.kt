@@ -414,6 +414,13 @@ class WirelessReceiverSession internal constructor(
         return w.sendAudioFocus(change).map { WirelessOutput.Common(it) }
     }
 
+    /** 调试探针：在加密的设备控制连接上发一条 `$` 记录，规则同 [ReceiverSession.sendDeviceData]。 */
+    fun sendDeviceData(module: Long, type: Int, data: ByteArray): List<WirelessOutput> {
+        if (ended) return emptyList()
+        val w = wired ?: return emptyList()
+        return w.sendDeviceData(module, type, data).map { WirelessOutput.Common(it) }
+    }
+
     // ---------------- 蓝牙控制通道 ----------------
 
     private fun handleBluetooth(outputs: List<BluetoothOutput>, nowMillis: Long, out: Out) {

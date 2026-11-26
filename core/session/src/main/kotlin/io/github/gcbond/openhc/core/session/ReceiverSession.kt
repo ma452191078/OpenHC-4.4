@@ -419,6 +419,22 @@ class ReceiverSession internal constructor(
         return session { out -> handleDmsdp(call(SessionLayer.DMSDP) { layer.sendAudioFocus(change) }, out) }
     }
 
+    /**
+     * 调试探针：在加密的设备控制连接上发一条 `$` 记录（例如 HiCar 元数据请求 dataType=514）。
+     * 设备控制连接还没加密、会话已结束时返回空列表；发送出错只记诊断，不结束会话。与其他方法一样要在协议线程上调用。
+     */
+    fun sendDeviceData(module: Long, type: Int, data: ByteArray): List<SessionOutput> {
+        if (ended) return emptyList()
+        val layer = dmsdp ?: return emptyList()
+        val out = Out()
+        try {
+            handleDmsdp(layer.sendDeviceData(module, type, data), out)
+        } catch (e: RuntimeException) {
+            diag(SessionLayer.DMSDP, "发送设备数据失败（${describe(e)}），已忽略", out)
+        }
+        return out.list
+    }
+
     // ---------------- nearby ----------------
 
     private fun handleNearby(outputs: List<NearbyOutput>, out: Out) {

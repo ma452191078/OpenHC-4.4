@@ -88,6 +88,10 @@ class WirelessRunnerBridge(
     /** 把车机的音频焦点变化告诉手机，见 [WirelessReceiverSession.sendAudioFocus]；在协议线程上调用。 */
     fun sendAudioFocus(change: CarAudioFocus): List<SessionOutput> = route(session.sendAudioFocus(change))
 
+    /** 调试探针：发一条设备记录，见 [WirelessReceiverSession.sendDeviceData]；在协议线程上调用。 */
+    fun sendDeviceData(module: Long, type: Int, data: ByteArray): List<SessionOutput> =
+        route(session.sendDeviceData(module, type, data))
+
     private fun route(outputs: List<WirelessOutput>): List<SessionOutput> {
         backlog.addAll(outputs)
         return if (drainScheduled) emptyList() else drain()

@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
 import io.github.gcbond.openhc.OpenHcApp
+import io.github.gcbond.openhc.settings.WirelessPreferences
 
 /**
  * 「蓝牙连上自动连接」的入口：手机的经典蓝牙连上 / 断开车机时（系统广播 ACL_CONNECTED / ACL_DISCONNECTED），
@@ -34,12 +35,17 @@ class BluetoothConnectionReceiver : BroadcastReceiver() {
         } catch (e: SecurityException) {
             null
         }
-        if (!BluetoothTrigger.isPhone(major)) return
         val address = try {
             device.address
         } catch (e: RuntimeException) {
             null
         } ?: return
+        // 设备类只是「不认识这台设备时」的过滤条件：本机记过的手机（用无线投屏成功过）不管它报什么类都算数——
+        // 部分手机/车机系统把手机报成音频类，按类过滤会把该拨的手机挡掉。
+        if (!BluetoothTrigger.isPhone(major)) {
+            val known = WirelessPreferences(context).knownPhones.any { it.equals(address, ignoreCase = true) }
+            if (!known) return
+        }
         val app = context.applicationContext as? OpenHcApp ?: return
         app.wireless.onPhoneBluetooth(connected, address)
     }
@@ -73,4 +79,22 @@ object BluetoothTrigger {
 
     /** 要不要听手机蓝牙连上：开关开着、没开「只用数据线连接」。 */
     fun listens(connectOnBluetooth: Boolean, wiredOnly: Boolean): Boolean = connectOnBluetooth && !wiredOnly
+}
+
+/**
+ * 兜底：不用 ACL_CONNECTED 广播也能知道手机蓝牙是不是连着。
+ *
+ * 部分车机 ROM 不投递这个系统广播（或被权限管家拦下），「蓝牙连上自动连接」就失效了。
+ * 这里用系统隐藏接口 `BluetoothDevice.isConnected()` 定时读经典蓝牙链路状态：安卓 9 起它属于
+ * 非 SDK 接口，可能被反射限制拒绝，读不到返回 null（调用方跳过，不影响其他逻辑）。
+ */
+object BluetoothLinkState {
+    /** 链路连着返回 true，断着 false，读不到（没有接口、反射被拒、异常）返回 null。 */
+    fun isConnected(device: BluetoothDevice): Boolean? = try {
+        val method = BluetoothDevice::class.java.getMethod("isConnected")
+        method.invoke(device) as? Boolean
+    } catch (e: Throwable) {
+        // NoSuchMethod / SecurityException / 非 SDK 接口限制都按「读不到」处理。
+        null
+    }
 }

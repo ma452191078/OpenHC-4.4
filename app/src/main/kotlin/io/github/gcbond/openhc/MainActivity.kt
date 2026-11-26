@@ -29,6 +29,7 @@ import io.github.gcbond.openhc.platform.media.VideoDecoder
 import io.github.gcbond.openhc.platform.net.VpnConsent
 import io.github.gcbond.openhc.settings.AppSettings
 import io.github.gcbond.openhc.settings.AudioPreferences
+import io.github.gcbond.openhc.settings.UpdatePreferences
 import io.github.gcbond.openhc.settings.WirelessPreferences
 import io.github.gcbond.openhc.startup.BootStart
 import io.github.gcbond.openhc.startup.BootStartPolicy
@@ -41,6 +42,9 @@ import io.github.gcbond.openhc.ui.REQ_BOOT_NOTIFICATIONS
 import io.github.gcbond.openhc.ui.REQ_SETTINGS_MIC
 import io.github.gcbond.openhc.ui.REQ_SETTINGS_PAGE
 import io.github.gcbond.openhc.ui.SettingsScreen
+import io.github.gcbond.openhc.ui.UpdateOverlay
+import io.github.gcbond.openhc.update.UpdatePhase
+import io.github.gcbond.openhc.update.UpdateUiState
 import io.github.gcbond.openhc.wireless.WirelessController
 import io.github.gcbond.openhc.wireless.WirelessPhase
 import io.github.gcbond.openhc.wireless.WirelessUiState
@@ -92,6 +96,8 @@ class MainActivity : Activity() {
     private val identity: IdentityLoader.Result by lazy { IdentityLoader.load(this) }
 
     private lateinit var root: FrameLayout
+    /** 屏内容层：切屏只换这一层，更新浮层挂在 root 上不受影响。 */
+    private lateinit var screenLayer: FrameLayout
     private lateinit var home: HomeScreen
     private lateinit var settingsScreen: SettingsScreen
     private lateinit var projectionScreen: ProjectionScreen
@@ -115,6 +121,15 @@ class MainActivity : Activity() {
     private var wirelessDecoder: VideoDecoder? = null
     private var wirelessTouchResets = 0
 
+    /** 更新浮层（提示/进度/失败）；都属于界面状态，不进状态机。 */
+    private var updateOverlay: UpdateOverlay? = null
+    private var progressOverlay: UpdateOverlay? = null
+
+    /** 已经弹过提示的版本，避免同一次检查反复弹。 */
+    private var promptedUpdateVersion: String? = null
+
+    private val updateListener: (UpdateUiState) -> Unit = { onUpdateState(it) }
+
     /** StateFlow 消费协程(onStart 起、onStop 停)。 */
     private val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var collectJobs: List<Job> = emptyList()
@@ -123,6 +138,11 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         root = FrameLayout(this).apply { setBackgroundColor(Palette.Background) }
+        screenLayer = FrameLayout(this)
+        root.addView(
+            screenLayer,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
         home = HomeScreen(
             this,
             identity,
@@ -134,6 +154,7 @@ class MainActivity : Activity() {
                 onResetTrustStore = { controller.resetTrustStoreAndStart() },
                 // 5.0 无线恢复：无线侧的开始/停止（4.4 上无线入口不显示，点不到这里）。
                 onWirelessStart = { wireless?.start() },
+                onWirelessReconnect = { wireless?.startReconnect() },
                 onWirelessStop = { wireless?.stop() },
                 onWiredStart = { requestStart(StartKind.START) },
                 onModeChanged = { (application as OpenHcApp).wirelessIfCreated?.onWiredOnlyChanged() },
@@ -165,6 +186,12 @@ class MainActivity : Activity() {
             startSelectedConnectionOnLaunch()
         }
         home.renderWired(state)
+
+        // 更新：状态随时回主线程；第一次创建才发起自动检查（旋转重建不重复请求）。
+        (application as OpenHcApp).updater.addListener(updateListener)
+        if (savedInstanceState == null) {
+            (application as OpenHcApp).updater.autoCheck()
+        }
     }
 
     /** 冷启动按保存的模式进入连接；插线/开机已经发起的启动由 StartPolicy 去重。 */
@@ -242,6 +269,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        (application as OpenHcApp).updater.removeListener(updateListener)
         super.onDestroy()
         uiScope.cancel()
     }
@@ -293,22 +321,22 @@ class MainActivity : Activity() {
             // 中途旋转会让画面比例和触控基准对不上（协议不支持中途重新协商尺寸）。
             requestedOrientation = currentLockedOrientation()
         }
-        root.removeAllViews()
+        screenLayer.removeAllViews()
         when (next) {
-            Screen.HOME -> root.addView(
+            Screen.HOME -> screenLayer.addView(
                 home,
                 FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
             )
             Screen.SETTINGS -> {
                 // 进设置前整组重建:通知权限、悬浮窗、开机记录可能都变了。
                 settingsScreen.rebuildSections()
-                root.addView(
+                screenLayer.addView(
                     settingsScreen,
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
                 )
             }
             Screen.PROJECTION -> {
-                root.addView(
+                screenLayer.addView(
                     projectionScreen,
                     FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
                 )
@@ -316,6 +344,8 @@ class MainActivity : Activity() {
             }
         }
         screen = next
+        // 投屏中不弹更新提示：回到首页时补上（同一版本只会弹一次）。
+        if (next == Screen.HOME) showUpdatePromptIfNeeded((application as OpenHcApp).updater.state)
     }
 
     /** 设置页返回:回首页;无线恢复后,原版的 wireless.onSettingsClosed() 也调回来(没建过无线控制器就跳过)。 */
@@ -411,13 +441,125 @@ class MainActivity : Activity() {
         }
     }
 
-    /** 返回键:设置页回首页、投屏页回首页;首页走默认行为(退出)。 */
+    /** 返回键:关更新浮层 → 设置页回首页、投屏页回首页;首页走默认行为(退出)。 */
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (updateOverlay != null && keyCode == KeyEvent.KEYCODE_BACK) {
+            if (progressOverlay != null) (application as OpenHcApp).updater.cancelDownload()
+            dismissUpdateOverlay()
+            return true
+        }
         if (keyCode == KeyEvent.KEYCODE_BACK && screen != Screen.HOME) {
             if (screen == Screen.SETTINGS) closeSettings() else showScreen(Screen.HOME)
             return true
         }
         return MediaKeys.onWindowKey(event) || super.onKeyDown(keyCode, event)
+    }
+
+    // ---------------------------------------------------------------- 更新
+
+    /** 更新状态落点（UpdateManager 已在主线程回调）。 */
+    private fun onUpdateState(value: UpdateUiState) {
+        if (isFinishing) return
+        when (value.phase) {
+            UpdatePhase.AVAILABLE -> {
+                dismissDownloadProgress()
+                showUpdatePromptIfNeeded(value)
+            }
+            UpdatePhase.DOWNLOADING -> showDownloadProgress(value.progress)
+            UpdatePhase.VERIFYING -> showDownloadProgress(100)
+            UpdatePhase.INSTALLING -> {
+                dismissDownloadProgress()
+                Toast.makeText(this, R.string.update_install_started, Toast.LENGTH_SHORT).show()
+            }
+            UpdatePhase.FAILED -> showUpdateFailure(value)
+            else -> dismissDownloadProgress()
+        }
+    }
+
+    /** 有新版本：按设置决定要不要弹窗；同一个版本在一次运行里只弹一次；投屏时不打扰。 */
+    private fun showUpdatePromptIfNeeded(value: UpdateUiState) {
+        val release = value.release ?: return
+        if (promptedUpdateVersion == release.version) return
+        if (!UpdatePreferences(this).notifyDialog) return
+        if (screen == Screen.PROJECTION) return
+        promptedUpdateVersion = release.version
+        showUpdateOverlay(
+            UpdateOverlay.prompt(
+                this,
+                release,
+                BuildConfig.VERSION_NAME,
+                onUpdate = {
+                    dismissUpdateOverlay()
+                    (application as OpenHcApp).updater.downloadAndInstall()
+                },
+                onLater = { dismissUpdateOverlay() },
+            ),
+        )
+    }
+
+    /** 下载进度：浮层常驻，只刷百分比。 */
+    private fun showDownloadProgress(percent: Int) {
+        val existing = progressOverlay
+        if (existing != null) {
+            existing.setProgress(percent)
+            return
+        }
+        val overlay = UpdateOverlay.progress(this, percent) {
+            (application as OpenHcApp).updater.cancelDownload()
+        }
+        showUpdateOverlay(overlay)
+        progressOverlay = overlay
+    }
+
+    /** 失败提示：自动检查失败不打扰（设置页能看到原因），下载/安装失败或缺授权才弹。 */
+    private fun showUpdateFailure(value: UpdateUiState) {
+        val messageRes = value.messageRes ?: return
+        if (progressOverlay == null && !value.needsInstallPermission) return
+        val detail = value.detail?.takeIf { it.isNotBlank() }
+        val message = getString(messageRes) + if (detail != null) getString(R.string.update_detail, detail) else ""
+        dismissDownloadProgress()
+        val needsPermission = value.needsInstallPermission
+        showUpdateOverlay(
+            UpdateOverlay.notice(
+                this,
+                message,
+                actionLabel = if (needsPermission) getString(R.string.update_open_install_permission) else null,
+                onAction = if (needsPermission) {
+                    {
+                        (application as OpenHcApp).updater.openInstallPermissionSettings()
+                        dismissUpdateOverlay()
+                    }
+                } else {
+                    null
+                },
+                onClose = { dismissUpdateOverlay() },
+            ),
+        )
+    }
+
+    /** 浮层挂在 root 上（屏内容在 screenLayer 里），切屏不会把浮层一起卸载。 */
+    private fun showUpdateOverlay(view: UpdateOverlay) {
+        updateOverlay?.let { root.removeView(it) }
+        updateOverlay = view
+        root.addView(
+            view,
+            FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+        )
+    }
+
+    private fun dismissUpdateOverlay() {
+        updateOverlay?.let { root.removeView(it) }
+        updateOverlay = null
+        progressOverlay = null
+    }
+
+    private fun dismissDownloadProgress() {
+        val overlay = progressOverlay ?: return
+        progressOverlay = null
+        if (updateOverlay === overlay) {
+            root.removeView(overlay)
+            updateOverlay = null
+        }
     }
 
     /** 车机的媒体键转给手机(只转发,不拦截返回)。 */

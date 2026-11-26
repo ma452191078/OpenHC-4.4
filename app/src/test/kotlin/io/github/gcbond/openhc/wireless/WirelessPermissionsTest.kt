@@ -1,6 +1,5 @@
 package io.github.gcbond.openhc.wireless
 
-import io.github.gcbond.openhc.wireless.WirelessPermissions.BLUETOOTH_ADVERTISE
 import io.github.gcbond.openhc.wireless.WirelessPermissions.BLUETOOTH_CONNECT
 import io.github.gcbond.openhc.wireless.WirelessPermissions.COARSE_LOCATION
 import io.github.gcbond.openhc.wireless.WirelessPermissions.FINE_LOCATION
@@ -32,20 +31,6 @@ class WirelessPermissionsTest {
             WirelessPermissions.toRequest(33, askNotifications = true),
         )
         assertEquals(listOf(BLUETOOTH_CONNECT, NEARBY_WIFI_DEVICES), WirelessPermissions.toRequest(36, askNotifications = false))
-    }
-
-    @Test
-    fun advertisingPermissionIsAskedForButNeverRequired() {
-        for (sdk in listOf(23, 29, 30)) assertEquals(emptyList(), WirelessPermissions.advertise(sdk), "安卓 $sdk 用清单里的旧权限")
-        for (sdk in listOf(31, 33, 36)) assertEquals(listOf(BLUETOOTH_ADVERTISE), WirelessPermissions.advertise(sdk))
-        assertEquals(
-            listOf(BLUETOOTH_CONNECT, NEARBY_WIFI_DEVICES, BLUETOOTH_ADVERTISE, POST_NOTIFICATIONS),
-            WirelessPermissions.toRequest(33, askNotifications = true, advertise = true),
-        )
-        assertEquals(listOf(FINE_LOCATION), WirelessPermissions.toRequest(29, askNotifications = false, advertise = true))
-        // 缺广播权限不挡扫码：不在必须的里面，申请之后也不算缺。
-        assertTrue(BLUETOOTH_ADVERTISE !in WirelessPermissions.required(36))
-        assertNull(WirelessPermissions.afterRequest(33, { it != BLUETOOTH_ADVERTISE }, { true }))
     }
 
     @Test

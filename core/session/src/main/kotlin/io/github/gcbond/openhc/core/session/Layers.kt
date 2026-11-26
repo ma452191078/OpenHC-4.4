@@ -94,6 +94,9 @@ internal interface DmsdpLayer {
 
     /** 把车机这边的音频焦点变化告诉手机。 */
     fun sendAudioFocus(change: CarAudioFocus): List<DmsdpOutput> = emptyList()
+
+    /** 在加密的设备控制连接上发一条 `$` 记录（调试探针用：例如 HiCar 元数据请求 dataType=514）。 */
+    fun sendDeviceData(module: Long, type: Int, data: ByteArray): List<DmsdpOutput> = emptyList()
 }
 
 internal interface HiSightLayer {
@@ -150,6 +153,8 @@ internal class ProductionLayers(
             override fun sendMicAudio(data: ByteArray, offset: Int, length: Int, nowMillis: Long) =
                 session.sendMicAudio(data, offset, length, nowMillis)
             override fun sendAudioFocus(change: CarAudioFocus) = session.sendAudioFocus(change)
+            override fun sendDeviceData(module: Long, type: Int, data: ByteArray) =
+                session.sendDeviceData(module, type, data)
         }
     }
 
