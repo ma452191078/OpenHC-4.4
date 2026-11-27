@@ -78,9 +78,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            // 没提供正式签名（OPENHC_SIGNING / openhc.signing）时用调试密钥签，方便直接装车机验证；
-            // 提供了就仍走上面的正式签名配置。
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            // 按项目要求：正式包统一使用本机测试签名（~/.android/debug.keystore），
+            // 保证 APK 可以直接覆盖安装车机上已装的同签名版本；不再使用 release 签名配置。
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
