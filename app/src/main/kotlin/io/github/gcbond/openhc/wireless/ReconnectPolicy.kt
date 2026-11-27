@@ -37,9 +37,6 @@ enum class AutoHold {
     /** 缺运行时权限。 */
     PERMISSIONS_MISSING,
 
-    /** 车机报告不支持 BLE 广播。只剩扫码等待里用到。 */
-    ADVERTISING_UNSUPPORTED,
-
     /** 读不到车机真实的蓝牙地址。 */
     BLUETOOTH_ADDRESS_MISSING,
 

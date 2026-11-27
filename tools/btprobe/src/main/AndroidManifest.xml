@@ -8,9 +8,8 @@
     -->
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <!-- 安卓 12 起的运行时权限：开监听要 CONNECT；ADVERTISE 与正式应用保持一致（无线发现要用）。 -->
+    <!-- 安卓 12 起的运行时权限：开 RFCOMM 监听要 CONNECT。 -->
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
     <uses-feature
         android:name="android.hardware.bluetooth"

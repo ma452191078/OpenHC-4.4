@@ -488,6 +488,60 @@ class AudioDepacketizerTest {
         assertEquals(1, recorder.notes.count { "对不上 12 字节头" in it })
     }
 
+    /** AAC 载荷前也有同样的 12 字节头（头后才是 ADTS），去掉头再放；声明长度可以是奇数。 */
+    @Test
+    fun aacHeaderIsStrippedWhenItsPayloadStartsAdts() {
+        // 第 i 帧长 207+i：i 为偶数时是奇数长度，PCM 的偶数要求不能套到这里。
+        val units = (0 until 6).map { i -> AudioSynthetic.adts(ByteArray(200 + i), trailing = 4) }
+        var bytes = ByteArray(0)
+        units.forEachIndexed { i, unit ->
+            val payload = AudioSynthetic.pcmHeader(timestamp = i * 5_333L, dataLength = unit.size - 4) + unit
+            bytes += AudioSynthetic.frame(FrameKind.LENGTH16, AudioSynthetic.rtp(i, payload))
+        }
+        val recorder = Recorder()
+        val depacketizer = depacketizer(recorder, AudioSynthetic.stream(codec = AudioCodec.AAC))
+        depacketizer.feedInPieces(bytes)
+        assertEquals(AudioCodec.AAC, recorder.framing?.payloadCodec)
+        assertEquals(6, depacketizer.aacHeadersStripped)
+        assertEquals(0, depacketizer.aacWithoutHeader)
+        units.forEachIndexed { i, unit -> assertContentEquals(unit.copyOf(unit.size - 4), recorder.payloads[i], "第 $i 包去掉了头和包尾") }
+        assertEquals(1, recorder.notes.count { "AAC 载荷前有 12 字节头" in it }, "规则只记一次")
+        assertEquals(1, recorder.notes.count { "AAC 包尾" in it && "多 4 字节" in it }, "尾巴只提示一次")
+        assertTrue("AAC 载荷去掉 12 字节头" in depacketizer.conclusion)
+    }
+
+    /** 带私有头的 ADTS 即使车机要的是 PCM，也按载荷认成 AAC。 */
+    @Test
+    fun aacWithPrivateHeaderIsRecognizedEvenWhenCarAskedPcm() {
+        var bytes = ByteArray(0)
+        repeat(4) { i ->
+            val unit = AudioSynthetic.adts(ByteArray(180 + i))
+            val payload = AudioSynthetic.pcmHeader(timestamp = i.toLong(), dataLength = unit.size) + unit
+            bytes += AudioSynthetic.frame(FrameKind.LENGTH32, AudioSynthetic.rtp(i, payload))
+        }
+        val recorder = Recorder()
+        val depacketizer = depacketizer(recorder, AudioSynthetic.stream(codec = AudioCodec.PCM))
+        depacketizer.feedInPieces(bytes)
+        assertEquals(AudioCodec.AAC, recorder.framing?.payloadCodec)
+        assertEquals(4, depacketizer.aacHeadersStripped)
+        assertEquals(0, depacketizer.pcmHeadersStripped)
+    }
+
+    /** 本来就是 ADTS、没有私有头的包原样放，不算「对不上头」。 */
+    @Test
+    fun aacWithoutPrivateHeaderIsKeptAsIs() {
+        val units = (0 until 5).map { i -> AudioSynthetic.adts(ByteArray(200 + i)) }
+        var bytes = ByteArray(0)
+        units.forEachIndexed { i, unit -> bytes += AudioSynthetic.frame(FrameKind.LENGTH32, AudioSynthetic.rtp(i, unit)) }
+        val recorder = Recorder()
+        val depacketizer = depacketizer(recorder, AudioSynthetic.stream(codec = AudioCodec.AAC))
+        depacketizer.feedInPieces(bytes)
+        assertEquals(AudioCodec.AAC, recorder.framing?.payloadCodec)
+        units.forEachIndexed { i, expected -> assertContentEquals(expected, recorder.payloads[i]) }
+        assertEquals(0, depacketizer.aacHeadersStripped)
+        assertEquals(5, depacketizer.aacWithoutHeader)
+    }
+
     @Test
     fun rtpParserFollowsRfc3550() {
         val view = RtpView()

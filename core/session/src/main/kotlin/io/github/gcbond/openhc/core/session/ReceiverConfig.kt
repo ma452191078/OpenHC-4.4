@@ -76,6 +76,11 @@ class ReceiverConfig(
      * 声明了手机录音时就改用车机麦克风，车机采不到时对方听不到，所以默认关，由应用按设置和录音权限打开。
      */
     val mic: MicSettings? = null,
+    /**
+     * 车机品牌图标的原始 PNG 字节（HiCar dataType 502）。手机连上后发 `{"brandIconData":"PNG"}` 来要，
+     * 车机把 PNG 原样回过去；null（默认）表示没有图标。
+     */
+    val brandIcon: ByteArray? = null,
 ) {
     /** 本机 deviceId（64 位大写十六进制）：认证里的本机身份、设备会话里的本机标识都用它。 */
     val deviceId: String = NearbySession.deviceId(identity.host, bluetoothAddress)
@@ -120,6 +125,9 @@ class ReceiverConfig(
         ),
         speaker = audio?.let { DmsdpConfig.Speaker(it.transport, it.codec, it.multiBus, it.aacPhones) },
         mic = mic?.let { DmsdpConfig.Mic(it.profile) },
+        brandIcon = brandIcon,
+        // 临时排查：把手机发来的每条设备记录完整写进日志。查完改回 false。
+        dumpDeviceRecords = false,
     )
 
     /** 投屏能力：屏幕和允许的编码尺寸都取画布尺寸（编码尺寸不超过画布）。 */
@@ -145,6 +153,7 @@ class ReceiverConfig(
         "CONNECT_ABILITY_KEY" to CONNECT_ABILITY_WIRED,
         "CAR_MODE_ID" to identity.host.fullModel,
         "CAR_BRAND" to identity.host.brand,
+        "DAY_NIGHT_MODE" to "day",
     )
 
     override fun toString() =

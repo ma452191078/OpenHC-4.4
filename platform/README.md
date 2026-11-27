@@ -7,7 +7,7 @@
 | `usb` | 识别插入的华为手机、申请 USB 权限、发 carInfo 控制传输、手机切成 USB 网卡后抢占接口 |
 | `net` | USB 网卡数据面：NTB16 组帧/拆帧、以太网/ARP/IPv4 最小处理、经 `VpnService` 建的 TUN 与系统 TCP 栈对接 |
 | `media` | 视频 MediaCodec 解码上屏、触摸换算、屏幕刷新率；音频 AudioTrack 播放（`AudioPlayer`）和音频焦点（`AudioFocusController`）；车机麦克风采集（`MicCapture`、`MicAacEncoder`）；车机媒体键（媒体按钮会话 `MediaKeySession`、转发规则 `MediaKeyForwarder`） |
-| `bluetooth` | 无线连接用的经典蓝牙：RFCOMM 服务端（`RfcommServer`）、读监听的实际通道号（`RfcommChannel`）、蓝牙开关状态；无线自动回连用的 BLE 广播（`BleBeacon`）和 GATT 服务端（`BeaconGattServer`）；补一次 LE 配对的入口（`LePairingPeripheral`） |
+| `bluetooth` | 无线连接用的经典蓝牙：RFCOMM 服务端（`RfcommServer`）、RFCOMM 客户端（`RfcommClient`）、读监听的实际通道号（`RfcommChannel`）、蓝牙开关状态 |
 | `wifi` | 无线连接用的 WiFi：车机开本地热点（`LocalHotspotOwner`，规则在 `LocalHotspotRules`）、WiFi 现状（`WifiStatus`）、MAC 地址的整理与打码（`MacText`） |
 
 能脱离安卓独立测试的纯逻辑（例如 NTB16、ARP 应答、校验和）写成不引用安卓类的普通类，
@@ -46,8 +46,7 @@ VpnService 已在本模块清单里声明，合并进应用后自动生效；TUN
 
 ## 无线连接用到的蓝牙和 WiFi
 
-本模块只做安卓接口的适配，类型都是自己的（不依赖 core:session；GATT 服务端按 core:nearby 的布局和回应规则挂服务，
-只在内部用）；把它们接到无线会话的平台动作上，在应用里（`app` 的 `wireless` 包）。
+本模块只做安卓接口的适配，类型都是自己的（不依赖 core:session）；把它们接到无线会话的平台动作上，在应用里（`app` 的 `wireless` 包）。
 
 **RFCOMM 服务端**（`RfcommServer`，实现 `RfcommEndpoint`）：
 
@@ -85,49 +84,6 @@ handle.stop()    // 稍等 0.2 秒（让会话最后几个包发出去）就关�
 - 系统要求：安卓 8～12 要精确位置权限、系统定位开关打开；安卓 13 起要「附近的 WiFi 设备」（清单里声明 `neverForLocation` 也行）；
   应用在前台（有前台服务也算）。车机开着个人热点、或在共享网络时开不了。权限由调用方在开始前确认；没有时报 `onFailed`，说明里带原因。
 - 开好以后被系统收回（WiFi 被关、别处开了热点）报 `onLost`。
-
-**BLE 广播**（`BleBeacon`，无线自动回连用；载荷由 core:nearby 的 `BleAdvertisement` 拼）：
-
-```kotlin
-when (BleBeacon.support(adapter)) { /* Available / Unavailable(原因)：没蓝牙、蓝牙关着、系统报告不支持多广播 */ }
-val beacon = BleBeacon(adapter, BleAdvertisement.SERVICE_DATA_UUID, payload, events) // 一次广播一个对象
-beacon.start()   // → events.onStarted() / onFailed(原因, permanent)，在主线程上
-beacon.stop()    // 任意时刻可调、可重复；还在启动中就等系统回了结果再停
-```
-
-- 只用老接口 `startAdvertising`：低延迟（间隔 100 ms）、可连接（因而可扫描）、中档功率、不超时，只带一段 Service Data，
-  不带设备名和功率字段；新系统内部换算成同样的广播集参数，安卓 6.0 起一条路径。换载荷（换序列号）就停掉、开新的。
-- **发送地址由系统蓝牙栈决定**（开了 LE 隐私就是随机地址），应用改不了也读不到；手机按广播的发送地址去连车机经典蓝牙，
-  所以只有发送地址就是车机蓝牙地址的车机上，配对过的手机才能靠广播回连。要在真机上用别的设备扫描核对。
-- 权限：安卓 12 起「附近的设备」里的广播权限（BLUETOOTH_ADVERTISE），更早用清单里的普通蓝牙权限。
-
-**GATT 服务端**（`BeaconGattServer`，和广播一起挂）：
-
-```kotlin
-val gatt = BeaconGattServer(context, events, log)
-gatt.open()    // 开服务端，按布局串行加两个主服务（前一个的添加回调到了再加下一个）→ events.onReady()
-gatt.close()   // 撤掉服务、断开客户端；可重复调用
-```
-
-- 只照布局挂好、按 core:nearby 的 `NearbyGattResponder` 规则回应，不在 GATT 上跑控制通道；每次连接、MTU、读写、
-  CCCD 都经 `log` 记下来（特征、长度、是否像控制帧，不记内容），真机上据此看有没有手机来用。
-- 有客户端连上时报 `onClientConnected`：部分车机在可连接广播被连上后就停发，调用方据此把广播关了再开一次。
-- 权限：安卓 12 起「附近的设备」（BLUETOOTH_CONNECT）。
-
-**补一次 LE 配对的入口**（`LePairingPeripheral`，设置「补全手机蓝牙配对」用）：
-
-```kotlin
-val entrance = LePairingPeripheral(context, adapter, events, log)
-entrance.open()    // 加服务 → 服务加好后开广播 → events.onAdvertising()；失败报 onFailed(Failure)
-entrance.close()   // 停广播、撤掉服务；可重复调用
-```
-
-- 车机开了 LE 隐私时，只做过经典蓝牙配对的手机解不回广播的随机地址；手机在自己的蓝牙设置里和这个入口配对一次，
-  就拿到了车机的身份解析密钥。本类只开入口，配对由两边的系统蓝牙完成，结果看系统的配对状态广播。
-- GATT：电池服务 `180F` 下一个电池电量特征 `2A19`，只读、读要加密链路；读请求能到应用，说明链路已经加密（`onEncryptedRead`）。
-- 广播：传统广播、可连接、低延迟、高功率，带完整设备名和服务 UUID `180F`，所以设备名最多 22 字节。设备名就是系统当前的
-  蓝牙名称，由调用方事先改好（应用里临时改成一个好认的名称，结束时改回）。
-- 权限：安卓 12 起「附近的设备」（BLUETOOTH_CONNECT、BLUETOOTH_ADVERTISE）。
 
 ## 解码上屏和触摸怎么用
 

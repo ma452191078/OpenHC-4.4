@@ -1,7 +1,6 @@
 package io.github.gcbond.openhc.settings
 
 import android.content.Context
-import android.os.Build
 import androidx.core.content.edit
 import io.github.gcbond.openhc.core.dmsdp.audio.AudioCodec
 import io.github.gcbond.openhc.core.dmsdp.audio.AudioTransport
@@ -111,14 +110,10 @@ class AudioPreferences(context: Context) {
             transport,
             codec,
             multiBus,
-            // 4.4 fork：这台车机（Android 4.4）的 AAC 解码器解不了部分手机的 AAC 流，实测整条连接
-            // SoftAAC2 持续报 error 16388、全程静音。自动回退只在上游（5.0+）保留；4.4 上一律按 PCM 声明，
-            // 免得一次「没开数据会话」的偶发判定把手机永久切成 AAC 后再也出不了声。
-            aacPhones = if (codec == AudioCodec.PCM && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                pcmFallbacks().aacPhones()
-            } else {
-                emptySet()
-            },
+            // 4.4 fork：这台车机的 AAC 解码器解不了部分手机的 AAC 流（实测整条连接 SoftAAC2 持续报
+            // error 16388、全程静音）。这里不再按手机自动退回 AAC，一律按用户选的编码声明（默认 PCM），
+            // 免得一次「没开数据会话」的偶发判定把手机永久切成 AAC 后再也出不了声；记录仍留给设置页看。
+            aacPhones = emptySet(),
         )
     } else {
         null

@@ -49,8 +49,8 @@ adb install -r openhc-btprobe-t26-debug.apk
    `hidden_api_policy_p_apps`）和 `adb shell settings get global hidden_api_blacklist_exemptions` 都应输出 `null`。
    探针的「系统信息」里也会自查这几项，读不到时记「跳过」。
 1. 先在系统里打开蓝牙。
-2. 打开「蓝牙探针 t36」，点「开始检测」。安卓 12 及以上会申请「附近的设备」权限（`BLUETOOTH_CONNECT`、
-   `BLUETOOTH_ADVERTISE`），请允许。拒绝了界面会提示，也能一键打开本应用的系统设置；检测照样进行，
+2. 打开「蓝牙探针 t36」，点「开始检测」。安卓 12 及以上会申请「附近的设备」权限（`BLUETOOTH_CONNECT`），
+   请允许。拒绝了界面会提示，也能一键打开本应用的系统设置；检测照样进行，
    需要权限的项会记成「异常」。
 3. 各项检测几秒内跑完。之后默认保持所有监听 60 秒（开关可关），这段时间可以用另一台设备来连、或者查 dumpsys
    （见下文「核对通道号」）；点「停止等待」可提前结束。最后关闭所有监听。

@@ -10,8 +10,8 @@ import androidx.multidex.MultiDexApplication
 import io.github.gcbond.openhc.connection.ConnectionController
 import io.github.gcbond.openhc.connection.Phase
 import io.github.gcbond.openhc.diagnostics.LogRecorder
-import io.github.gcbond.openhc.dim.BtMediaWatcher
 import io.github.gcbond.openhc.dim.DimMediaClient
+import io.github.gcbond.openhc.dim.HiCarMediaWatcher
 import io.github.gcbond.openhc.startup.BootStart
 import io.github.gcbond.openhc.startup.ProjectionSurfacer
 import io.github.gcbond.openhc.update.UpdateManager
@@ -26,8 +26,8 @@ class OpenHcApp : MultiDexApplication() {
     /** 仪表盘多媒体信息投放（ECARX 车机才有对应的系统服务，没有时绑定失败即空转）。 */
     val dimMedia by lazy { DimMediaClient(this) }
 
-    /** 车机蓝牙 AVRCP 的当前播放信息，转到 [dimMedia] 显示到仪表盘。 */
-    val btMedia by lazy { BtMediaWatcher(this, dimMedia) }
+    /** HiCar 手机推送的音频元数据，转到 [dimMedia] 显示到仪表盘。 */
+    val hicarMedia by lazy { HiCarMediaWatcher(dimMedia) }
 
     /** 版本更新：启动时检查一次 GitHub Releases，设置里也能手动检查。 */
     val updater by lazy { UpdateManager(this) }
@@ -63,9 +63,8 @@ class OpenHcApp : MultiDexApplication() {
         super.onCreate()
         // 一启动就开始记自己的日志（「设置 → 诊断 → 导出诊断日志」用），越早越能把启动过程记全。
         LogRecorder.start(this)
-        // 仪表盘多媒体通道：连上后等上游喂媒体信息（蓝牙 AVRCP 那一路随应用启动就开始监听）。
+        // 仪表盘多媒体通道：连上后等 HiCar 通道喂媒体信息（标题在投放时固定为「HiCar」）。
         dimMedia.start()
-        btMedia.start()
         // 调试探针（仅 debug 包）：adb 广播触发 HiCar 元数据请求，用来确认 514/515 走哪个 module/type。
         if (BuildConfig.DEBUG) startAaProbe()
         registerActivityLifecycleCallbacks(uiVisibility)

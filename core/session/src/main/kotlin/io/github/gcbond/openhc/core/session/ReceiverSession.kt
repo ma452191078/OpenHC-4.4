@@ -596,6 +596,20 @@ class ReceiverSession internal constructor(
                 is DmsdpEvent.EncryptionEnabled -> out.add(SessionEvent.DeviceSessionReady(o.keepAliveMode))
                 is DmsdpEvent.KeepAliveTimeout -> finish(EndReason.KeepAliveTimeout(o.mode), out)
                 is DmsdpEvent.DisplayPortAnnounced -> beginHiSight(o.port, out)
+                is DmsdpEvent.MetadataCapability ->
+                    out.add(SessionEvent.MetadataCapability(o.module, String(o.data, Charsets.UTF_8)))
+                is DmsdpEvent.MediaMetadata ->
+                    out.add(SessionEvent.MediaMetadata(o.module, String(o.data, Charsets.UTF_8)))
+                is DmsdpEvent.NavigationMetadata ->
+                    out.add(SessionEvent.NavigationMetadata(o.module, String(o.data, Charsets.UTF_8)))
+                // 投屏服务的前后台切换：202 暂停（用户点了车辆品牌图标等，要回车机界面），203 恢复。
+                is DmsdpEvent.ServiceStatusChanged -> when {
+                    o.serviceType == SERVICE_TYPE_DISPLAY && o.action == SERVICE_ACTION_PAUSE ->
+                        out.add(SessionEvent.DisplayPaused)
+                    o.serviceType == SERVICE_TYPE_DISPLAY && o.action == SERVICE_ACTION_RESUME ->
+                        out.add(SessionEvent.DisplayResumed)
+                    else -> diag(SessionLayer.DMSDP, o.toString(), out)
+                }
                 is DmsdpEvent -> diag(SessionLayer.DMSDP, o.toString(), out)
             }
         }
@@ -924,6 +938,13 @@ class ReceiverSession internal constructor(
         const val AUDIO_PORT_MIN = 20_000
         const val AUDIO_PORT_MAX = 59_998
         const val AUDIO_PORT_ATTEMPTS = 8
+
+        /** 设备会话里投屏服务的类型号（module 3 / serviceType=8），与 dmsdp 层的服务声明一致。 */
+        const val SERVICE_TYPE_DISPLAY = 8L
+
+        /** 投屏服务暂停 / 恢复（HiCar SDK 的 EVENT_DEVICE_SERVICE_PAUSE / RESUME）。 */
+        const val SERVICE_ACTION_PAUSE = 202
+        const val SERVICE_ACTION_RESUME = 203
 
         fun describe(e: Throwable): String = e.javaClass.simpleName + (e.message?.let { "：$it" } ?: "")
     }

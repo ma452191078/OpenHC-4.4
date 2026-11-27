@@ -46,8 +46,8 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         multiDexEnabled = true
         // versionCode = 主版本 × 10000 + 次版本 × 100 + 补丁号。
-        versionCode = 1
-        versionName = "0.0.1"
+        versionCode = 2
+        versionName = "0.0.2"
     }
 
     sourceSets {
@@ -145,4 +145,39 @@ android.applicationVariants.all {
         rename { "openhc-android4.4-$versionName$apkSuffix.apk" }
     }
     tasks.named("assemble$cap").configure { finalizedBy(copyTask) }
+}
+
+// 静默覆盖安装：Flyme 生产固件屏蔽了 `adb install`（INSTALL_FAILED_USER_RESTRICTED），
+// 但 PackageManager 的会话安装（install-create/write/commit）可用。ANDROID_SERIAL 可指定设备。
+tasks.register("installDebugSilent") {
+    group = "install"
+    description = "静默覆盖安装 debug 包（会话安装，绕过 Flyme 对 adb install 的限制）"
+    dependsOn("assembleDebug")
+    val apk = distDir.resolve("openhc-android4.4-${android.defaultConfig.versionName ?: "dev"}-debug.apk")
+    doLast {
+        fun exec(vararg cmd: String): String {
+            val process = ProcessBuilder(*cmd).redirectErrorStream(true).start()
+            val text = process.inputStream.bufferedReader().readText().trim()
+            check(process.waitFor() == 0) { "执行失败：${cmd.joinToString(" ")}\n$text" }
+            return text
+        }
+        val serial = System.getenv("ANDROID_SERIAL")
+        fun adb(vararg args: String) =
+            if (serial.isNullOrBlank()) arrayOf("adb", *args) else arrayOf("adb", "-s", serial, *args)
+
+        check(apk.isFile) { "找不到 $apk，先跑 assembleDebug" }
+        val remote = "/data/local/tmp/openhc-install.apk"
+        val size = apk.length().toString()
+        logger.lifecycle("推送 ${apk.name}（$size 字节）...")
+        exec(*adb("push", apk.absolutePath, remote))
+        val session = Regex("""install session \[(\d+)]""")
+            .find(exec(*adb("shell", "pm", "install-create", "-r", "-t", "-S", size)))
+            ?.groupValues?.get(1)
+            ?: error("创建安装会话失败")
+        exec(*adb("shell", "pm", "install-write", "-S", size, session, "base", remote))
+        val commit = exec(*adb("shell", "pm", "install-commit", session))
+        require(commit.contains("Success")) { "安装失败：$commit" }
+        exec(*adb("shell", "rm", "-f", remote))
+        logger.lifecycle("已静默覆盖安装（安装会话 $session）")
+    }
 }

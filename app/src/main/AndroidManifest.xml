@@ -45,12 +45,7 @@
         android:name="android.permission.BLUETOOTH_ADMIN"
         android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <!--
-        无线自动回连：车机发 BLE 广播、挂 GATT 服务，让配对过的手机靠近时自己连上来。安卓 12 起发广播要运行时权限
-        （也在「附近的设备」里），开始无线连接时一起申请；拒绝了照样能扫码，只是不能自动回连。更早用上面的旧权限。
-        设置「补全手机蓝牙配对」也用这几个：临时改车机蓝牙名称、挂 GATT 服务、发带名称的广播，结束时改回名称。
-    -->
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <!-- 无线连接走经典蓝牙：安卓 12 起相关操作要「附近的设备」运行时权限，开始连接时申请；拒绝后只能扫码。 -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission

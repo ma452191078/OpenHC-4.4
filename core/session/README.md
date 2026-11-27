@@ -153,16 +153,13 @@ TCP 部分（`SessionAction`）与有线相同，由 `SocketRunner` 执行。
 - 车机经典蓝牙的**真实**公共地址（`WirelessReceiverConfig.bluetoothAddress`）：二维码、deviceId、手机算「车机 ID」都用它，
   公开接口只给占位值，要另想办法取得（读不到就只能让车主填写）。
 - 同一时刻只能有一个程序注册蓝牙控制服务的 UUID，系统里另有同类服务在跑会抢走手机的连接。
-- （可选）BLE 广播和 GATT 服务端（载荷、布局见 core:nearby「BLE 广播与回连」），以及会话结束后重新开一个会话，
-  让配对过的手机能再次连上。应用里的做法（「等已配对的手机回连」）：会话的 `PairingReady`（蓝牙控制监听开好）之后
-  再挂 GATT、发广播，`PhoneBluetoothConnected`、`Ended` 和收尾时都停广播；会话本身与扫码时完全相同。
 
 ### 事件
 
 | 事件 | 时机 |
 |---|---|
 | `WirelessEvent.PairingReady(qrCode, pinCode)` | 蓝牙监听已开好：显示二维码和连接码（toString 不含内容） |
-| `WirelessEvent.PhoneBluetoothConnected(address)` | 手机经蓝牙连上（有 BLE 广播的话可以停了） |
+| `WirelessEvent.PhoneBluetoothConnected(address)` | 手机经蓝牙连上 |
 | `WirelessEvent.BluetoothHandshakeCompleted(encrypted)` | 蓝牙控制通道握手完成 |
 | `WirelessEvent.DataChannelNegotiated(frequencyMhz)` | 手机确认了频率 |
 | `WirelessEvent.WifiNetworkReady(frequencyMhz)` | 车机的热点开好了（常在手机发协商请求之前） |

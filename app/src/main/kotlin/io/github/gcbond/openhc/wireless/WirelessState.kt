@@ -19,7 +19,7 @@ enum class WirelessPhase {
     /** 正在准备：检查条件、开蓝牙监听。 */
     PREPARING,
 
-    /** 等手机连上车机蓝牙：平常靠 BLE 广播弹「发现车机」，广播发不了时给二维码兜底。 */
+    /** 等手机连上车机蓝牙：打开应用先显示二维码，已配对的手机会自动回连；新手机扫码即可。 */
     WAITING_FOR_SCAN,
 
     /** 手机已经连上，正在一步步往下走（见 [WirelessStep]）。 */
@@ -145,13 +145,16 @@ sealed class WirelessSignal {
 
     object StopRequested : WirelessSignal()
 
+    /** 用户从首页点「回到投屏画面」：清掉手机切走时的暂停标记。 */
+    object ProjectionForeground : WirelessSignal()
+
     class Wireless(val event: WirelessEvent) : WirelessSignal()
 
     class Session(val event: SessionEvent) : WirelessSignal()
 
     data class VideoSize(val width: Int, val height: Int) : WirelessSignal()
 
-    /** 视频流断了（[stalled] = true）或恢复了：界面据此重新显示/收起「等待画面」覆盖层。 */
+    /** 视频流断了（[stalled] = true）或恢复了。已经出过画面时只在日志里记，不再盖「等待画面」。 */
     data class VideoStalled(val stalled: Boolean) : WirelessSignal()
 
     data class DecoderProblem(val detail: String) : WirelessSignal()
@@ -239,6 +242,10 @@ object WirelessReducer {
 
         WirelessSignal.StopRequested -> if (state.phase == WirelessPhase.IDLE) state else stopping(state)
 
+        WirelessSignal.ProjectionForeground -> state.copy(
+            projection = ConnectionReducer.reduce(state.projection, ConnectionSignal.ProjectionForeground),
+        )
+
         is WirelessSignal.Wireless -> onWireless(state, signal.event)
 
         is WirelessSignal.Session -> onSession(state, signal.event)
@@ -250,8 +257,9 @@ object WirelessReducer {
         }
 
         is WirelessSignal.VideoStalled -> if (state.phase in ATTEMPT_PHASES) {
-            // 掉流时把「首帧」打回去：投屏页据此重新显示「等待画面」，不再是无声的黑屏。
-            state.copy(projection = state.projection.copy(firstFrame = !signal.stalled))
+            // 已经出过画面就不再盖「等待画面」：手机短暂停发时最后一帧本来就还留在屏幕上，
+            // 盖上覆盖层反而像画面丢了。只有还没出过第一帧时才显示等待层；恢复时照常收起。
+            state.copy(projection = state.projection.copy(firstFrame = state.projection.firstFrame || !signal.stalled))
         } else {
             state
         }

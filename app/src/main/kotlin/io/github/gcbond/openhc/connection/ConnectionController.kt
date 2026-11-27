@@ -11,7 +11,9 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.ContextCompat
 import io.github.gcbond.openhc.AppIntents
+import io.github.gcbond.openhc.BrandIcon
 import io.github.gcbond.openhc.IdentityLoader
+import io.github.gcbond.openhc.OpenHcApp
 import io.github.gcbond.openhc.audio.AudioOutput
 import io.github.gcbond.openhc.audio.MicInput
 import io.github.gcbond.openhc.audio.MicPermission
@@ -158,6 +160,20 @@ class ConnectionController(context: Context) {
         gate.disarm()
         connectionWanted = true
         beginAttempt()
+    }
+
+    /**
+     * 用户从首页点「回到投屏画面」：清掉暂停标记，并请手机把 HiCar 切回前台（dataType 532，Background=false）。
+     * 不这样做的话手机还停在后台状态，再点车辆品牌图标不会再发暂停通知。
+     */
+    fun projectionForeground() = post {
+        apply(ConnectionSignal.ProjectionForeground)
+        val current = attempt ?: return@post
+        if (current.tearingDown || current.finished) return@post
+        Log.i(TAG, "回到投屏画面：请手机把 HiCar 切回前台")
+        current.runner.submit {
+            current.session.sendDeviceData(1L, HICAR_TYPE_PROJECT_ACTION, PROJECT_ACTION_FOREGROUND)
+        }
     }
 
     /** 首页「停止」：本次连接按顺序收尾，不再自动重连。 */
@@ -344,6 +360,8 @@ class ConnectionController(context: Context) {
                 mediaKeyInput = MediaKeyPreferences(app).enabled,
                 audio = audio,
                 mic = mic,
+                // 「设置 → 车辆品牌」选中的车标作为品牌图标回传（dataType 502）；「默认」时为 null。
+                brandIcon = BrandIcon.load(app),
             )
         } catch (e: IllegalArgumentException) {
             return block(Notice.StartFailed("配置不合法：${e.message}"))
@@ -393,6 +411,9 @@ class ConnectionController(context: Context) {
         val permissionGraceMs: Long,
     ) {
         val sink = ForwardingSink()
+
+        /** 已经拿到手机的元数据能力应答（514），不用再重试。 */
+        var metadataGranted = false
 
         /** 车机媒体键的去处（[MediaKeys]）：按键在主线程上转进来，投到协议线程上发给手机。 */
         val keys = MediaKeys.Target("有线 #$id") { key ->
@@ -465,7 +486,12 @@ class ConnectionController(context: Context) {
 
     /** 会话事件，在协议线程上。 */
     private fun onProtocolEvent(current: Attempt, event: SessionEvent) {
-        if (event is SessionEvent.Diagnostic) Log.d(TAG_SESSION, "[${current.id}] $event") else Log.i(TAG_SESSION, "[${current.id}] $event")
+        if (event is SessionEvent.Diagnostic) {
+            // 这台车机的 Flyme 关了 D 级日志；排查元数据时临时按 Info 记录，方便看手机上报了什么。
+            if (LOG_SESSION_DIAGNOSTICS) Log.i(TAG_SESSION, "[${current.id}] $event") else Log.d(TAG_SESSION, "[${current.id}] $event")
+        } else {
+            Log.i(TAG_SESSION, "[${current.id}] $event")
+        }
         when (event) {
             // 在协议线程上同步建好解码器：之后的帧也在这个线程上送，保证第一帧到时解码器已经接上。
             is SessionEvent.VideoNegotiated -> prepareDecoder(current, event.video)
@@ -524,8 +550,36 @@ class ConnectionController(context: Context) {
                 if (current.keyNegotiated && !current.tearingDown) MediaKeys.ready(app, current.keys)
             }
             is SessionEvent.Ended -> if (current.tearingDown) maybeFinish(current) else teardown(current)
+            // HiCar 元数据：加密连上后先查一次能力，手机之后才会推 515（曲目/进度）。
+            is SessionEvent.DeviceSessionReady -> requestHiCarMetadata(current)
+            is SessionEvent.MetadataCapability -> {
+                current.metadataGranted = true
+                (app as? OpenHcApp)?.hicarMedia?.onCapability(event.json)
+            }
+            is SessionEvent.MediaMetadata -> (app as? OpenHcApp)?.hicarMedia?.onMetadata(event.json)
+            is SessionEvent.NavigationMetadata -> (app as? OpenHcApp)?.hicarMedia?.onNavigation(event.json)
             else -> Unit
         }
+    }
+
+    /**
+     * 查询 HiCar 可开放的元数据类型（dataType 514，module 1）。手机之后才会推 515（曲目/进度）。
+     *
+     * 刚加密完就发时手机有时还不接（实测第一发没有应答），隔 2s、5s 再补发；收到应答就不再发。
+     */
+    private fun requestHiCarMetadata(current: Attempt) = requestHiCarMetadata(current, 0)
+
+    private fun requestHiCarMetadata(current: Attempt, step: Int) {
+        if (step >= HICAR_METADATA_DELAYS_MS.size) return
+        handler.postDelayed({
+            if (current.metadataGranted || current.tearingDown || attempt !== current) return@postDelayed
+            val request = hicarMetadataRequest(current.identity.host.fullModel)
+            for (module in HICAR_METADATA_MODULES) {
+                Log.i(TAG, "第 ${current.id} 次连接：请求 HiCar 元数据能力（module=$module type=514，第 ${step + 1} 次）")
+                current.runner.submit { current.session.sendDeviceData(module, HICAR_TYPE_METADATA_ABILITY, request) }
+            }
+            requestHiCarMetadata(current, step + 1)
+        }, HICAR_METADATA_DELAYS_MS[step])
     }
 
     private fun startWired(current: Attempt, port: Int) {
@@ -824,6 +878,24 @@ class ConnectionController(context: Context) {
         private const val WATCH_SLICE_MS = 60_000L
 
         private const val FOREGROUND_FAILED = "前台服务启动失败"
+
+        /** HiCar 应用元数据：514 查询能力。实测 module 1 会回 514 应答（MEDIA=true），手机随后推 515。 */
+        private const val HICAR_TYPE_METADATA_ABILITY = 514
+        private val HICAR_METADATA_MODULES = longArrayOf(1L)
+
+        /** HiCar 前后台切换（dataType 532）：回到投屏画面时请手机把 HiCar 切回前台。 */
+        private const val HICAR_TYPE_PROJECT_ACTION = 532
+        private val PROJECT_ACTION_FOREGROUND = "{\"ProjectAction\":{\"Background\":false}}".toByteArray(Charsets.UTF_8)
+
+        /** 514 查询的重试节奏（毫秒）：连上后立即发一次，手机没接就隔 2s、5s 再补。 */
+        private val HICAR_METADATA_DELAYS_MS = longArrayOf(0L, 2_000L, 5_000L)
+
+        /** 514 请求正文：按文档带上 RequestCaller（当前车型 modelId），手机按车型记录授权。 */
+        internal fun hicarMetadataRequest(modelId: String): ByteArray =
+            """{"RequestAAData":7,"RequestCaller":"$modelId"}""".toByteArray(Charsets.UTF_8)
+
+        /** 临时排查开关：把会话诊断事件也写成 Info 日志（这台 Flyme 关了 D 级日志）。查完改回 false。 */
+        private const val LOG_SESSION_DIAGNOSTICS = false
 
         private val PRESENT_MODES = setOf(PhoneUsbMode.NORMAL, PhoneUsbMode.USB_DEBUGGING, PhoneUsbMode.NCM)
     }

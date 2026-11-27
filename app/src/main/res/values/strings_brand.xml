@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_nav_brand">品牌</string>
+    <string name="settings_brand_group">车辆品牌</string>
+    <string name="settings_brand_desc">选择车标后，手机端的品牌图标和车机名称在下次连接时生效；OpenHC 自己的界面不变。</string>
+    <string name="settings_brand_note">品牌图标会作为 dataType 502 回传给手机；如遇无声等异常，可切回「默认」。</string>
+    <string name="settings_brand_default">默认（CarPlay）</string>
+    <string name="settings_brand_selected">当前：%1$s</string>
+    <string name="settings_brand_applied">已选择「%1$s」，下次连接生效</string>
+    <string name="settings_brand_default_applied">已恢复默认</string>
+</resources>

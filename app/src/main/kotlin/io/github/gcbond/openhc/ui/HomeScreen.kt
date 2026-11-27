@@ -48,6 +48,7 @@ import io.github.gcbond.openhc.wireless.WirelessUiState
  */
 internal class HomeActions(
     val onStart: () -> Unit,
+    /** 投屏中的「停止」：停下来回二维码页，之后不自动重连。 */
     val onStop: () -> Unit,
     val onRetryNow: () -> Unit,
     val onGrantVpn: () -> Unit,
@@ -55,6 +56,7 @@ internal class HomeActions(
     val onWirelessStart: () -> Unit,
     /** 二维码页上的「开始连接」：主动拨最近连成功过的手机。 */
     val onWirelessReconnect: () -> Unit,
+    /** 投屏中的「停止」：停下来回二维码页，之后不自动重连。 */
     val onWirelessStop: () -> Unit,
     /** 进入有线首页：自动走权限、VPN 和有线连接启动链。 */
     val onWiredStart: () -> Unit,
@@ -201,6 +203,9 @@ private fun buttonView(context: Context, spec: HomeButton): TextView {
     view.gravity = Gravity.CENTER
     view.maxLines = 1
     view.ellipsize = TextUtils.TruncateAt.END
+    // 宽度按文字走：左右各留一点内边距，看起来比文字稍宽即可。
+    val padH = context.dp(24f)
+    view.setPadding(padH, 0, padH, 0)
     if (spec.primary) view.setTypeface(view.typeface, Typeface.BOLD)
     view.background = if (spec.primary) {
         roundedBg(context, 12f, Palette.Accent)
@@ -345,6 +350,17 @@ internal class HomeScreen(
         applyConnectionMode()
     }
 
+    /**
+     * 从投屏 / 设置回到首页时调用：清掉渲染签名，按最后一次状态重画一遍。
+     * 投屏中首页不在窗口里，那期间的渲染可能带着旧的测量结果；回到首页时重画一次，按钮等子视图才会正常出现。
+     */
+    fun refreshPanel() {
+        lastWirelessSig = null
+        lastWiredSig = null
+        lastWirelessState?.let { renderWireless(it) }
+        lastWiredState?.let { renderWired(it) }
+    }
+
     /** 右侧面板宽屏时各自一个 fillViewport 的 ScrollView，与原无线面板一致。 */
     private fun panelScroll(panel: View): ScrollView = ScrollView(context).apply {
         isVerticalScrollBarEnabled = false
@@ -439,7 +455,7 @@ internal class HomeScreen(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        // brand-mark：34dp acc 实心圆角方块（r9）+ accInk 链环图标（去渐变）。
+        // brand-mark：34dp acc 实心圆角方块（r9）+ 链环图标。车标只在设置页选、回传给手机，不换这里。
         val mark = FrameLayout(context).apply {
             background = roundedBg(context, 9f, Palette.Accent)
             addView(
@@ -818,22 +834,18 @@ internal class HomeScreen(
         setNote(parts, "")
     }
 
-    /** 有线各阶段的按钮（沿用旧版有线卡：授权 / 重置配对 / 开始 / 回投屏 / 立即重试 / 停止）。 */
+    /** 有线各阶段的按钮（授权 / 重置配对 / 开始 / 回投屏 / 立即重试；投屏中才给停止）。 */
     private fun wiredButtonList(state: ConnectionUiState): List<HomeButton> {
         val startEnabled = identity is IdentityLoader.Result.Loaded
         return when {
             state.phase != Phase.IDLE -> buildList {
                 if (state.phase == Phase.PROJECTING) {
                     add(button(R.string.action_show_projection) { onShowProjection() })
+                    add(button(R.string.action_stop, primary = false) { actions.onStop() })
                 }
                 if (state.phase == Phase.REPLUG_REQUIRED) {
                     add(button(R.string.action_retry_now, primary = false) { actions.onRetryNow() })
                 }
-                add(
-                    button(R.string.action_stop, primary = false, enabled = state.phase != Phase.STOPPING) {
-                        actions.onStop()
-                    },
-                )
             }
             else -> when (state.notice) {
                 null -> emptyList()
@@ -1239,31 +1251,49 @@ internal class HomeScreen(
         parts.note.visibility = if (text.isEmpty()) GONE else VISIBLE
     }
 
-    /** 按钮区：整宽竖排，间距 10dp；主按钮 58dp（紧凑 50dp），次级 44dp；扫码态单按钮 44dp 给码体让高度。 */
+    /**
+     * 按钮区：多个按钮横向排列，单个按钮居中；间距 10dp。主按钮 58dp（紧凑 50dp），次级 44dp。
+     * 宽度按文字自适应（左右各留 24dp 内边距），不铺满整栏。
+     */
     private fun fillButtons(container: LinearLayout, list: List<HomeButton>) {
         container.removeAllViews()
         if (list.isEmpty()) {
             container.visibility = GONE
             return
         }
-        val scanSingle = list.size == 1 && list[0].text == context.getString(R.string.action_stop)
+        val horizontal = list.size > 1
+        container.orientation = if (horizontal) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+        container.gravity = Gravity.CENTER_HORIZONTAL
         list.forEachIndexed { index, spec ->
-            val height = context.dp(
-                if (scanSingle) 44f else if (spec.primary) (if (context.compactLayout()) 50f else 58f) else 44f,
-            )
+            val height = context.dp(if (spec.primary) (if (context.compactLayout()) 50f else 58f) else 44f)
+            val view = buttonView(context, spec)
+            // 宽度按文字量出来（左右内边距各 24dp）；不依赖布局阶段的 wrap_content。
+            val textWidth = view.paint.measureText(spec.text.toString()) + context.dp(48f)
+            val available = if (container.width > 0) container.width else Int.MAX_VALUE
+            val width = minOf(textWidth.toInt() + 1, available)
             container.addView(
-                buttonView(context, spec),
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height).apply {
-                    if (index > 0) topMargin = context.dp(10f)
+                view,
+                LinearLayout.LayoutParams(width, height).apply {
+                    if (horizontal) {
+                        gravity = Gravity.CENTER_VERTICAL
+                        if (index > 0) marginStart = context.dp(10f)
+                    } else {
+                        gravity = Gravity.CENTER_HORIZONTAL
+                        if (index > 0) topMargin = context.dp(10f)
+                    }
                 },
             )
         }
         container.visibility = VISIBLE
     }
 
-    /** 造一个按钮描述（文案取资源 id；primary/enabled 语义同旧 pillButton）。 */
-    private fun button(textRes: Int, primary: Boolean = true, enabled: Boolean = true, onClick: () -> Unit): HomeButton =
-        HomeButton(context.getString(textRes), onClick, primary, enabled)
+    /** 造一个按钮描述（文案取资源 id；primary/enabled 语义同 [HomeButton]）。 */
+    private fun button(
+        textRes: Int,
+        primary: Boolean = true,
+        enabled: Boolean = true,
+        onClick: () -> Unit,
+    ): HomeButton = HomeButton(context.getString(textRes), onClick, primary, enabled)
 
     /** 无线各阶段的按钮（上游同款分支，与原 wirelessButtonList 一一对应）。 */
     private fun wirelessButtonList(state: WirelessUiState, wirelessOff: Boolean): List<HomeButton> {
@@ -1273,24 +1303,15 @@ internal class HomeScreen(
             wirelessOff -> listOf(
                 button(R.string.wireless_action_open_settings) { onOpenSettings() },
             )
-            // 二维码页：连成功过手机时多给一个「开始连接」，车主不用扫码也能让车机主动拨它。
-            phase == WirelessPhase.WAITING_FOR_SCAN && wirelessPreferences.knownPhoneList.isNotEmpty() -> buildList {
-                add(button(R.string.wireless_action_start) { actions.onWirelessReconnect() })
-                add(
-                    button(R.string.action_stop, primary = false, enabled = phase != WirelessPhase.STOPPING) {
-                        actions.onWirelessStop()
-                    },
-                )
-            }
+            // 二维码页：连成功过手机时给一个「自动重连」，车主不用扫码也能让车机主动拨它。
+            phase == WirelessPhase.WAITING_FOR_SCAN && wirelessPreferences.knownPhoneList.isNotEmpty() -> listOf(
+                button(R.string.wireless_action_reconnect) { actions.onWirelessReconnect() },
+            )
             phase != WirelessPhase.IDLE -> buildList {
                 if (phase == WirelessPhase.PROJECTING) {
                     add(button(R.string.action_show_projection) { onShowProjection() })
+                    add(button(R.string.action_stop, primary = false) { actions.onWirelessStop() })
                 }
-                add(
-                    button(R.string.action_stop, primary = false, enabled = phase != WirelessPhase.STOPPING) {
-                        actions.onWirelessStop()
-                    },
-                )
             }
             else -> when (val notice = state.notice) {
                 // 4.4/5.1 权限装包时已授予，到这只是异常兜底：给「授权」再试一次。

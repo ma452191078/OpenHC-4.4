@@ -204,6 +204,11 @@ internal class DesktopApp(private val options: DesktopOptions, private val out: 
                 firstFrameAt = System.nanoTime()
                 log("收到首帧" + (if (phoneAt != 0L) "（距手机连上 ${seconds(firstFrameAt - phoneAt)}）" else ""))
             }
+            SessionEvent.DisplayPaused -> log("手机把投屏切到后台（返回车机界面），连接保持")
+            SessionEvent.DisplayResumed -> log("手机把投屏切回前台")
+            is SessionEvent.MetadataCapability -> log("HiCar 元数据能力：${event.json}")
+            is SessionEvent.MediaMetadata -> log("HiCar 音频元数据：${event.json}")
+            is SessionEvent.NavigationMetadata -> log("HiCar 导航元数据：${event.json}")
             is SessionEvent.Diagnostic -> log("诊断（${event.layer}）：${event.message}")
             is SessionEvent.Ended -> {
                 endReason = event.reason

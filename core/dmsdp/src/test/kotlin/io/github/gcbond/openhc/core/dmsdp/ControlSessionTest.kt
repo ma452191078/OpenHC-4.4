@@ -325,6 +325,42 @@ class ControlSessionTest {
     }
 
     @Test
+    fun brandIconReplyIsRawPng() {
+        val png = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x01, 0x02)
+        val config = DmsdpConfig(
+            host = Synthetic.host(),
+            deviceId = Synthetic.SELF_ID,
+            bluetoothMac = Synthetic.MAC,
+            localIp = Synthetic.LOCAL_IP,
+            phoneIp = Synthetic.PHONE_IP,
+            brandIcon = png,
+        )
+        val (session, _) = encryptedSession(config)
+        val request = phone.encryptedRecord(1, 502, "{\"brandIconData\":\"PNG\"}".toByteArray())
+        val out = session.feed(DmsdpChannel.CONTROL, request)
+        val reply = out.sends(DmsdpChannel.CONTROL).single()
+        val record = DeviceRecords.parseAll(phone.openControlFrame(reply)).single()
+        assertEquals(1L, record.module)
+        assertEquals(502, record.type)
+        assertContentEquals(png, record.data, "回的是原始 PNG，不是 JSON")
+        assertEquals(png.size, assertIs<DmsdpEvent.BrandIconReplied>(out.events().last()).size)
+
+        // 没有图标时按未处理数据交出，不回包。
+        val (bare, _) = encryptedSession()
+        val bareOut = bare.feed(DmsdpChannel.CONTROL, request)
+        assertTrue(bareOut.sends(DmsdpChannel.CONTROL).isEmpty())
+        assertEquals(502, assertIs<DmsdpEvent.UnhandledDeviceData>(bareOut.events().last()).type)
+
+        assertFailsWith<IllegalArgumentException> {
+            DmsdpConfig(
+                host = Synthetic.host(), deviceId = Synthetic.SELF_ID, bluetoothMac = Synthetic.MAC,
+                localIp = Synthetic.LOCAL_IP, phoneIp = Synthetic.PHONE_IP,
+                brandIcon = byteArrayOf(0x00, 0x01),
+            )
+        }
+    }
+
+    @Test
     fun displayPortMustBeExact() {
         for ((data, port) in listOf("e581" to 1, "e5ff" to 127, "e50081" to 128, "e57f7f83" to 65535)) {
             val (session, _) = encryptedSession()

@@ -12,7 +12,7 @@ class WirelessPreferences(context: Context) {
     private val prefs = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
     /**
-     * 只用数据线连接（默认关）：开着时完全不做无线——不发 BLE 广播、不等手机回连、不理会手机蓝牙连上，
+     * 只用数据线连接（默认关）：开着时完全不做无线——不出二维码、不等手机回连、不理会手机蓝牙连上，
      * 「开始无线连接」也开始不了。只影响无线，有线照常。
      */
     var wiredOnly: Boolean
@@ -47,14 +47,6 @@ class WirelessPreferences(context: Context) {
     /** 最近一次用无线连成功的手机（大写的蓝牙地址）：打开本应用时拨它。 */
     val lastPhone: String? get() = knownPhoneList.lastOrNull()
 
-    /**
-     * 上一次无线投屏是手机端主动断开的（手机点了断开/结束投屏）。开着时打开应用只显示二维码、不主动拨手机，
-     * 等车主点「开始连接」或扫码；手机蓝牙重新连上车机时仍会拨（那是车主在手机上的操作）。
-     */
-    var lastEndByPeer: Boolean
-        get() = prefs.getBoolean(KEY_LAST_END_BY_PEER, false)
-        set(value) = prefs.edit { putBoolean(KEY_LAST_END_BY_PEER, value) }
-
     /** 记下一台连成功的手机，当作最近那台；最多记 [MAX_KNOWN_PHONES] 台，多了丢掉最早的。返回这台手机是不是第一次记下。 */
     @Synchronized
     fun rememberPhone(address: String): Boolean {
@@ -71,7 +63,6 @@ class WirelessPreferences(context: Context) {
         private const val KEY_WIFI_DIRECT = "wifi_direct"
         private const val KEY_CONNECT_ON_BLUETOOTH = "connect_on_bluetooth"
         private const val KEY_KNOWN_PHONES = "known_phones"
-        private const val KEY_LAST_END_BY_PEER = "last_end_by_peer"
 
         /** 「连成功过的手机」最多记几台。 */
         const val MAX_KNOWN_PHONES = 5

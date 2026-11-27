@@ -37,8 +37,6 @@ WiFi 数据通道协商都在蓝牙上做；车机在手机认证通过后开热
 相同，认证按手机报的 `has_pin` 走免码回连；热点等连上手机的蓝牙控制通道后才开。只拨用无线连成功过的手机，一次蓝牙连接里
 回到界面只拨一次。调度和触发规则在 `app` 的 `WirelessController`、`ReconnectPolicy`；会话一侧是 `core.session` 的
 `WirelessReceiverSession.startReconnect` 和 `core.nearby` 里车机作为发起方的控制通道。
-早先的被动等待（车机发 BLE 广播、等手机连上来，载荷见 [`core/nearby/README.md`「BLE 广播与回连」](../core/nearby/README.md#ble-广播与回连)，
-以及配合它的「补全手机蓝牙配对」）代码还在，已不再自动进入，之后删掉。
 
 ## 模块与依赖
 
@@ -53,7 +51,7 @@ tools:desktop ─▶ core:session        （开发工具，不进安装包）
 - **core:session**：唯一同时依赖四个协议层的 core 模块，负责层间交接；另带一个基于 java.net 的阻塞 I/O 执行器。
 - **tools:desktop**：在电脑的 JVM 上直接连真手机跑完整会话的调试程序，见 [`tools/desktop/README.md`](../tools/desktop/README.md)。
 - **platform**：安卓系统接口的适配，见 [`platform/README.md`](../platform/README.md)。除 core:common 外还依赖
-  core:hisight（media 包的接口直接用协议层的类型）和 core:nearby（只在内部用：GATT 服务端按 nearby 的布局挂服务）。
+  core:hisight（media 包的接口直接用协议层的类型）。
 - **app**：界面、设置、把各层串成一次完整连接。
 
 各 `core` 层的职责见对应目录下的 `README.md`。

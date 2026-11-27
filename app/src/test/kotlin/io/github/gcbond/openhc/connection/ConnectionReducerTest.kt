@@ -149,6 +149,25 @@ class ConnectionReducerTest {
     }
 
     @Test
+    fun displayPauseKeepsTheConnectionAndResumeClearsIt() {
+        val projecting = run(
+            *untilPhoneConnected,
+            session(SessionEvent.VideoNegotiated(video)),
+            session(SessionEvent.PlayAccepted),
+        )
+        // 手机点了 HiCar 里的车辆品牌图标：投屏阶段和连接都保持不变，只是界面要回车机首页。
+        val paused = run(session(SessionEvent.DisplayPaused), from = projecting)
+        assertEquals(Phase.PROJECTING, paused.phase)
+        assertTrue(paused.displayPaused)
+        assertTrue(paused.active)
+
+        // 手机重新拉起 HiCar：恢复显示投屏。
+        val resumed = run(session(SessionEvent.DisplayResumed), from = paused)
+        assertEquals(Phase.PROJECTING, resumed.phase)
+        assertFalse(resumed.displayPaused)
+    }
+
+    @Test
     fun sessionEndStopsInputAndIgnoresLateEvents() {
         val projecting = run(
             *untilPhoneConnected,

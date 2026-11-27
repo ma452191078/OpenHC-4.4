@@ -35,8 +35,8 @@ internal class SettingsScreen(
     private val onBack: () -> Unit,
 ) : LinearLayout(context), SectionHost {
 
-    /** 左导航的七个段。 */
-    private enum class Nav { PICTURE, AUDIO, WIRELESS, BOOT, CONNECTION, UPDATE, DIAG }
+    /** 左导航的八个段。 */
+    private enum class Nav { PICTURE, BRAND, AUDIO, WIRELESS, BOOT, CONNECTION, UPDATE, DIAG }
 
     private val settings = AppSettings(context)
     private val host = ActivitySectionHost(context as Activity)
@@ -46,6 +46,7 @@ internal class SettingsScreen(
 
     // 只保留当前段的实例；切段时全部置 null 释放（懒加载，低内存）。
     private var picture: PictureGroup? = null
+    private var brand: BrandSection? = null
     private var audio: AudioSection? = null
     private var wireless: WirelessSection? = null
     private var boot: BootStartSection? = null
@@ -139,6 +140,7 @@ internal class SettingsScreen(
         current = nav
         content.removeAllViews()
         picture = null
+        brand = null
         audio = null
         wireless = null
         boot = null
@@ -151,6 +153,11 @@ internal class SettingsScreen(
                 picture = group
                 content.addView(group, sectionParams(0f))
                 content.addView(mediaKeyGroup(context), sectionParams(14f))
+            }
+            Nav.BRAND -> {
+                val section = BrandSection(context)
+                brand = section
+                content.addView(section, sectionParams(0f))
             }
             Nav.AUDIO -> {
                 val section = AudioSection(context, this)
@@ -190,13 +197,13 @@ internal class SettingsScreen(
     private fun addNavItems(container: LinearLayout) {
         val items = buildList {
             add(Triple(Nav.PICTURE, context.getString(R.string.settings_group_picture), "icons/nav_picture.svg"))
+            add(Triple(Nav.BRAND, context.getString(R.string.settings_nav_brand), "icons/nav_brand.svg"))
             add(Triple(Nav.AUDIO, context.getString(R.string.settings_nav_audio), "icons/nav_audio.svg"))
             if (wirelessAvailable) {
                 add(Triple(Nav.WIRELESS, context.getString(R.string.settings_nav_wireless), "icons/mode_wireless.svg"))
             }
             add(Triple(Nav.BOOT, context.getString(R.string.settings_boot_title), "icons/nav_boot.svg"))
-            // 「连接方式」：里面有「启用有线连接」开关，默认关；关着时分组里只剩这个开关。
-            add(Triple(Nav.CONNECTION, context.getString(R.string.settings_group_connection), "icons/nav_connection.svg"))
+            // 「连接方式」暂时隐藏，不在菜单里露出；对应段落代码保留，需要时把这一项加回来即可。
             add(Triple(Nav.UPDATE, context.getString(R.string.settings_nav_update), "icons/nav_update.svg"))
             add(Triple(Nav.DIAG, context.getString(R.string.settings_group_diagnostics), "icons/nav_diag.svg"))
         }

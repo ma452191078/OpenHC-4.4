@@ -92,8 +92,9 @@ class HiCarAuthSession(
         val hasPin = body.booleanField("has_pin")
         val usbConnection = body.booleanField("usb_connection")
         val version = root.exactString("version")
-        // 诊断只记这几个标志，不记 deviceId。
-        val flags = "has_pin=$hasPin，usb_connection=$usbConnection，version=${version ?: "无"}"
+        // 诊断记握手字段（敏感的设备标识不记），便于确认手机型号/系统/HiCar 版本与桌面能力。
+        val redacted = JsonObject(body.filterKeys { it != "deviceId" })
+        val flags = "has_pin=$hasPin，usb_connection=$usbConnection，version=${version ?: "无"}，握手=${redacted.toString().take(600)}"
         handshake?.let { previous ->
             throw MalformedMessageException("本轮认证出现重复的设备握手（上次 has_pin=${previous.hasPin}；这次 $flags）")
         }

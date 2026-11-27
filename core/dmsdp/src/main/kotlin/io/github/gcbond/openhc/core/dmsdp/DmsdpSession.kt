@@ -503,6 +503,11 @@ class DmsdpSession(
     }
 
     private fun onDeviceRecord(record: DeviceRecord, nowMillis: Long, out: Outputs) {
+        if (config.dumpDeviceRecords) {
+            out.event(
+                DmsdpEvent.RecordDump(record.module, record.type, record.data.size, describeRecordData(record.data)),
+            )
+        }
         val deviceData = record.type == DeviceMessageHandler.TYPE_DEVICE_DATA
         when {
             deviceData && record.module == DeviceMessageHandler.MODULE_DEVICE -> devices.handle(
@@ -530,6 +535,29 @@ class DmsdpSession(
                             record.data.copyOfRange(command.next, record.data.size),
                         ),
                     )
+                }
+            }
+            // 应用元数据：514 是能力查询的应答，515 是手机推送的曲目信息/进度。按 dataType 认，不依赖 module。
+            record.type == TYPE_AA_METADATA_ABILITY ->
+                out.event(DmsdpEvent.MetadataCapability(record.module, record.data))
+            record.type == TYPE_AA_MEDIA_METADATA -> {
+                // 华为要求车机逐条确认，否则手机后续不再推送。
+                sendRecord(record.module, TYPE_AA_MEDIA_METADATA, MEDIA_METADATA_ACK, out)
+                out.event(DmsdpEvent.MediaMetadata(record.module, record.data))
+            }
+            record.type == TYPE_AA_NAVIGATION_METADATA -> {
+                // 与 515 一样，逐条确认。
+                sendRecord(record.module, TYPE_AA_NAVIGATION_METADATA, NAVIGATION_METADATA_ACK, out)
+                out.event(DmsdpEvent.NavigationMetadata(record.module, record.data))
+            }
+            // 品牌图标：手机发 {"brandIconData":"PNG"} 来要图标，车机把 PNG 二进制原样回过去（不是 JSON）。
+            record.type == TYPE_AA_BRAND_ICON -> {
+                val icon = config.brandIcon
+                if (icon != null) {
+                    sendRecord(record.module, TYPE_AA_BRAND_ICON, icon, out)
+                    out.event(DmsdpEvent.BrandIconReplied(record.module, icon.size))
+                } else {
+                    out.event(DmsdpEvent.UnhandledDeviceData(record.module, record.type, record.data))
                 }
             }
             // 通话 / 语音助手状态：正常走 module 1，module 4 上同样的 type 也认（放在焦点消息前面）。
@@ -611,6 +639,18 @@ class DmsdpSession(
         check(!closed) { "会话已关闭" }
     }
 
+    /** 调试用：把一条设备记录的正文写成可读文本（可打印就给全文，否则给前 64 字节十六进制）。 */
+    private fun describeRecordData(data: ByteArray): String {
+        if (data.isEmpty()) return "（空）"
+        val printable = data.all {
+            val v = it.toInt() and 0xFF
+            v in 0x20..0x7E || v == 0x09 || v == 0x0A || v == 0x0D
+        }
+        if (printable) return String(data, Charsets.UTF_8)
+        val head = data.take(64).joinToString(" ") { "%02x".format(it.toInt() and 0xFF) }
+        return "hex（${data.size} 字节，前 ${minOf(data.size, 64)} 字节）$head"
+    }
+
     private inline fun fatalOnError(block: () -> Unit) {
         try {
             block()
@@ -651,6 +691,20 @@ class DmsdpSession(
         /** 文件分享等管理消息：设备记录 module 1 / type 17。 */
         const val MODULE_MANAGEMENT = 1L
         const val TYPE_MANAGEMENT = 17
+
+        /** 华为 HiCar 应用元数据：514 查询能力、515 手机推送曲目信息/进度、517 导航元数据（车机必须逐条回确认）。 */
+        const val TYPE_AA_METADATA_ABILITY = 514
+        const val TYPE_AA_MEDIA_METADATA = 515
+        const val TYPE_AA_NAVIGATION_METADATA = 517
+
+        /** 品牌图标（502）：手机来要图标，车机回原始 PNG 二进制。 */
+        const val TYPE_AA_BRAND_ICON = 502
+
+        /** 515 的确认报文，RespCode 100000 表示成功。 */
+        val MEDIA_METADATA_ACK = """{"MediaDataResp":{"RespCode":100000}}""".toByteArray(Charsets.UTF_8)
+
+        /** 517 的确认报文，RespCode 100000 表示成功。 */
+        val NAVIGATION_METADATA_ACK = """{"NavigationDataResp":{"RespCode":100000}}""".toByteArray(Charsets.UTF_8)
 
         /** 1～5 位 ASCII 数字、值在 1～65535 之间的端口。 */
         fun parsePort(text: String?): Int? {

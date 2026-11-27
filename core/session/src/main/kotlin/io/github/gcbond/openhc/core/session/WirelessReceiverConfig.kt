@@ -46,6 +46,8 @@ class WirelessReceiverConfig(
     val timeouts: WirelessTimeouts = WirelessTimeouts(),
     /** WiFi 阶段是否声明扬声器，规则与有线的 [ReceiverConfig.audio] 相同；null（默认）不声明。 */
     val audio: AudioSettings? = null,
+    /** 车机品牌图标的原始 PNG 字节（dataType 502），规则与有线的 [ReceiverConfig.brandIcon] 相同。 */
+    val brandIcon: ByteArray? = null,
 ) {
     /** 本机 deviceId（64 位大写十六进制），与有线同一算法。 */
     val deviceId: String
@@ -85,6 +87,7 @@ class WirelessReceiverConfig(
         keyInput = keyInput,
         mediaKeyInput = mediaKeyInput,
         audio = audio,
+        brandIcon = brandIcon,
     )
 
     internal fun authConfig(pinCode: String): HiCarAuthConfig =
@@ -95,6 +98,7 @@ class WirelessReceiverConfig(
         "CONNECT_ABILITY_KEY" to if (supportsUsb) CONNECT_ABILITY_BOTH else CONNECT_ABILITY_WIRELESS,
         "CAR_MODE_ID" to identity.host.fullModel,
         "CAR_BRAND" to identity.host.brand,
+        "DAY_NIGHT_MODE" to "day",
     )
 
     override fun toString() = "WirelessReceiverConfig(画布=${display.width}x${display.height}@${display.fps})"

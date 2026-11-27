@@ -1,6 +1,7 @@
 package io.github.gcbond.openhc.platform.media
 
 import android.graphics.ImageFormat
+import android.graphics.SurfaceTexture
 import android.media.ImageReader
 import android.media.MediaCodec
 import android.media.MediaFormat
@@ -231,6 +232,11 @@ class VideoDecoder @JvmOverloads constructor(
     /** 视图 Surface 每换一次加一：排着的重放据此判断还算不算数。 */
     private var surfaceGeneration = 0
     private var placeholder: ImageReader? = null
+    /** 23 前的占位 Surface：用 SurfaceTexture 接解码输出，只取帧不显示。 */
+    private var placeholderTexture: SurfaceTexture? = null
+    private var placeholderTextureSurface: Surface? = null
+    private var placeholderWidth = 0
+    private var placeholderHeight = 0
     private var waitNotified = false
     private var maxInputSize = 0
     private var hintFps = 0
@@ -254,6 +260,12 @@ class VideoDecoder @JvmOverloads constructor(
 
     /** 同 [lastArrivalMs]，给掉流检测用：手机停发视频时这个值不再增长。 */
     val lastInputAtMillis: Long get() = lastArrivalMs
+
+    /** 最近一帧真正送显的时间（毫秒），还没送过为 -1。积压的帧还在放时它一直在走，手机停发后画面也能撑一阵。 */
+    @Volatile
+    private var lastShownMs = -1L
+
+    val lastShownAtMillis: Long get() = lastShownMs
 
     // ---------------------------------------------------------------- 解码线程独占
 
@@ -408,7 +420,13 @@ class VideoDecoder @JvmOverloads constructor(
                 if (placeholderSurface != null) {
                     // 先标记再切：切换过程中出的帧直接还给解码器，不往占位 Surface 上送。
                     outputOnPlaceholder = true
-                    if (switchOutputLocked(c, placeholderSurface)) {
+                    // 23 前原地换不了输出（没有 setOutputSurface）：重建解码器、让它直接输出到占位 Surface。
+                    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                        if (rebuildForSurfaceLocked(sps)) {
+                            Log.i(TAG, "没有视图 Surface，重建解码器到占位 Surface，继续解码")
+                            return
+                        }
+                    } else if (switchOutputLocked(c, placeholderSurface)) {
                         Log.i(TAG, "没有视图 Surface，输出切到占位 Surface，继续解码")
                         return
                     }
@@ -746,6 +764,7 @@ class VideoDecoder @JvmOverloads constructor(
     private fun releaseNow(index: Int, render: Boolean) {
         try {
             outputCodec?.releaseOutputBuffer(index, render)
+            if (render) lastShownMs = now()
         } catch (e: IllegalStateException) {
             // 解码器刚被别的线程释放。
         }
@@ -1110,39 +1129,83 @@ class VideoDecoder @JvmOverloads constructor(
     }
 
     /**
-     * 占位 Surface：一个私有格式的 ImageReader。在它上面时出帧不送显，解码器只是照常解码、维持参考帧；
-     * 万一有帧送过来，取出来直接丢掉，免得占住缓冲。
+     * 占位 Surface：解码器照常解码、维持参考帧，但出来的帧不显示。
+     * 23 起用私有格式的 ImageReader；23 前没有它，用 SurfaceTexture 接输出（API 11 起可用），
+     * 每来一帧取走一次，免得解码器的输出缓冲被占满。
      */
     private fun placeholderLocked(width: Int, height: Int): Surface? {
-        // 4.4 fork：私有格式的 ImageReader 是 23+ 的，更早的系统没有看不见的占位输出，
-        // 没有 Surface 就只能释放解码器、等关键帧（调用方走现有的 SURFACE_LOST 降级）。
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null
-        placeholder?.let { return it.surface }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            placeholder?.let { return it.surface }
+            return try {
+                val reader = ImageReader.newInstance(width, height, ImageFormat.PRIVATE, PLACEHOLDER_IMAGES)
+                reader.setOnImageAvailableListener({ r ->
+                    try {
+                        r.acquireLatestImage()?.close()
+                    } catch (e: RuntimeException) {
+                        // 读者已关闭，或者取图失败：丢掉即可。
+                    }
+                }, handler)
+                placeholder = reader
+                reader.surface
+            } catch (e: RuntimeException) {
+                Log.w(TAG, "建不了占位 Surface：${e.message}")
+                null
+            }
+        }
+        placeholderTextureSurface?.let {
+            if (placeholderWidth == width && placeholderHeight == height) return it
+            closePlaceholderLocked()
+        }
         return try {
-            val reader = ImageReader.newInstance(width, height, ImageFormat.PRIVATE, PLACEHOLDER_IMAGES)
-            reader.setOnImageAvailableListener({ r ->
+            val texture = SurfaceTexture(0)
+            texture.setDefaultBufferSize(width.coerceAtLeast(1), height.coerceAtLeast(1))
+            texture.setOnFrameAvailableListener {
                 try {
-                    r.acquireLatestImage()?.close()
+                    texture.updateTexImage()
                 } catch (e: RuntimeException) {
-                    // 读者已关闭，或者取图失败：丢掉即可。
+                    // 占位输出取帧失败不影响解码。
                 }
-            }, handler)
-            placeholder = reader
-            reader.surface
+            }
+            val surface = Surface(texture)
+            placeholderTexture = texture
+            placeholderTextureSurface = surface
+            placeholderWidth = width
+            placeholderHeight = height
+            surface
         } catch (e: RuntimeException) {
-            Log.w(TAG, "建不了占位 Surface：${e.message}")
+            Log.w(TAG, "建不了占位 SurfaceTexture：${e.message}")
+            closePlaceholderLocked()
             null
         }
     }
 
     private fun closePlaceholderLocked() {
-        val reader = placeholder ?: return
-        placeholder = null
-        try {
-            reader.close()
-        } catch (e: RuntimeException) {
-            // 关闭失败也不影响后续。
+        placeholder?.let {
+            placeholder = null
+            try {
+                it.close()
+            } catch (e: RuntimeException) {
+                // 关闭失败也不影响后续。
+            }
         }
+        placeholderTextureSurface?.let {
+            placeholderTextureSurface = null
+            try {
+                it.release()
+            } catch (e: RuntimeException) {
+                // 同上。
+            }
+        }
+        placeholderTexture?.let {
+            placeholderTexture = null
+            try {
+                it.release()
+            } catch (e: RuntimeException) {
+                // 同上。
+            }
+        }
+        placeholderWidth = 0
+        placeholderHeight = 0
     }
 
     private fun switchOutputLocked(c: MediaCodec, target: Surface): Boolean = try {

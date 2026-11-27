@@ -79,7 +79,7 @@ internal object BootStart {
     /** 开机静默连接真的起作用：开机自动打开也开着（开机广播接收器启用着）。 */
     fun silentEffective(context: Context): Boolean = isSilent(context) && isEnabled(context)
 
-    /** 无线连接要的运行时权限都有（不再需要 BLE 广播权限）。 */
+    /** 无线连接要的运行时权限都有。 */
     fun wirelessPermissionsGranted(context: Context): Boolean {
         val sdk = Build.VERSION.SDK_INT
         val granted = { permission: String ->

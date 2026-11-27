@@ -4,6 +4,7 @@
     <string name="wireless_tagline">手机扫码，经蓝牙配对后走 WiFi 投屏，无需插线。需打开车机蓝牙。</string>
 
     <string name="wireless_action_start">开始无线连接</string>
+    <string name="wireless_action_reconnect">自动重连</string>
     <string name="wireless_action_grant">授权</string>
     <string name="wireless_action_app_settings">去系统设置</string>
     <string name="wireless_action_enable_bt">打开蓝牙</string>

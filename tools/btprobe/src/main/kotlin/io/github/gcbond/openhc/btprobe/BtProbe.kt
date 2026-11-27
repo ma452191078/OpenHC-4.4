@@ -659,7 +659,7 @@ class BtProbe(
 
     companion object {
         /** 安卓 12 起要在运行时申请的权限。 */
-        val RUNTIME_PERMISSIONS = listOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_ADVERTISE)
+        val RUNTIME_PERMISSIONS = listOf(Manifest.permission.BLUETOOTH_CONNECT)
 
         // 协议要求的两个 RFCOMM 监听：A 带服务记录，手机用 SDP 查通道号；B 在认证阶段再开，
         // 车机把它的实际通道号通过协议告诉手机，手机按通道号直连、不查 SDP。

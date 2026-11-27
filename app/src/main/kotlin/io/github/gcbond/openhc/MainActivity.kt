@@ -111,6 +111,10 @@ class MainActivity : Activity() {
     /** 5.0 无线恢复：无线自己的自动切屏计数（有线/无线 attempt 各自从 1 起，共用会撞号）。 */
     private var autoShownWirelessAttempt = 0
 
+    /** 手机把投屏切到后台的状态（点了 HiCar 里的车辆品牌图标）：切回首页，等手机恢复再回投屏。 */
+    private var wiredDisplayPaused = false
+    private var wirelessDisplayPaused = false
+
     /** 最新状态与解码器(各 StateFlow 异步到,渲染时取本地的最新值)。 */
     private var state = ConnectionUiState()
     private var decoder: VideoDecoder? = null
@@ -159,7 +163,7 @@ class MainActivity : Activity() {
                 onWiredStart = { requestStart(StartKind.START) },
                 onModeChanged = { (application as OpenHcApp).wirelessIfCreated?.onWiredOnlyChanged() },
             ),
-            onShowProjection = { showScreen(Screen.PROJECTION) },
+            onShowProjection = { showProjectionFromHome() },
             onOpenSettings = { showScreen(Screen.SETTINGS) },
         )
         settingsScreen = SettingsScreen(this) { closeSettings() }
@@ -323,10 +327,14 @@ class MainActivity : Activity() {
         }
         screenLayer.removeAllViews()
         when (next) {
-            Screen.HOME -> screenLayer.addView(
-                home,
-                FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
-            )
+            Screen.HOME -> {
+                screenLayer.addView(
+                    home,
+                    FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+                )
+                // 投屏期间首页不在窗口里：回来时按最后一次状态重画一次，按钮等子视图才正常。
+                home.refreshPanel()
+            }
             Screen.SETTINGS -> {
                 // 进设置前整组重建:通知权限、悬浮窗、开机记录可能都变了。
                 settingsScreen.rebuildSections()
@@ -346,6 +354,30 @@ class MainActivity : Activity() {
         screen = next
         // 投屏中不弹更新提示：回到首页时补上（同一版本只会弹一次）。
         if (next == Screen.HOME) showUpdatePromptIfNeeded((application as OpenHcApp).updater.state)
+    }
+
+    /**
+     * 首页点「回到投屏画面」：手机之前点了车辆品牌图标切走的话，先请它把 HiCar 切回前台，
+     * 否则手机会一直停在后台状态，再点品牌图标不会再发暂停通知。
+     */
+    private fun showProjectionFromHome() {
+        if (wirelessDisplayPaused) wireless?.projectionForeground()
+        if (wiredDisplayPaused) controller.projectionForeground()
+        showScreen(Screen.PROJECTION)
+    }
+
+    /**
+     * 手机把投屏切到后台（例如点了 HiCar 里的车辆品牌图标）时回首页；切回来时若还在投屏就重新显示投屏。
+     * 只在首页和投屏屏之间切，用户在设置页时不强行拉走。返回新的暂停标记。
+     */
+    private fun applyDisplayPaused(paused: Boolean, projecting: Boolean, previous: Boolean): Boolean {
+        if (paused == previous) return previous
+        if (paused) {
+            if (screen == Screen.PROJECTION) showScreen(Screen.HOME)
+        } else if (projecting && screen == Screen.HOME) {
+            showScreen(Screen.PROJECTION)
+        }
+        return paused
     }
 
     /** 设置页返回:回首页;无线恢复后,原版的 wireless.onSettingsClosed() 也调回来(没建过无线控制器就跳过)。 */
@@ -377,6 +409,8 @@ class MainActivity : Activity() {
                 wirelessState.phase != WirelessPhase.PROJECTING -> showScreen(Screen.HOME)
             value.phase == Phase.PAIRING && screen == Screen.SETTINGS -> showScreen(Screen.HOME)
         }
+        // 手机点了 HiCar 里的车辆品牌图标要回车机界面：暂停投屏回首页；手机重新拉起 HiCar 时再回投屏。
+        wiredDisplayPaused = applyDisplayPaused(value.displayPaused, value.phase == Phase.PROJECTING, wiredDisplayPaused)
         state = value
         home.renderWired(value)
         if (screen == Screen.PROJECTION) {
@@ -411,6 +445,12 @@ class MainActivity : Activity() {
                 state.phase != Phase.PROJECTING -> showScreen(Screen.HOME)
             value.phase == WirelessPhase.WAITING_FOR_SCAN && screen == Screen.SETTINGS -> showScreen(Screen.HOME)
         }
+        // 与有线同一条规则：手机切走/切回 HiCar 投屏时，在首页和投屏屏之间跟着切换。
+        wirelessDisplayPaused = applyDisplayPaused(
+            value.projection.displayPaused,
+            value.phase == WirelessPhase.PROJECTING,
+            wirelessDisplayPaused,
+        )
         wirelessState = value
         home.renderWireless(value)
         if (screen == Screen.PROJECTION) {

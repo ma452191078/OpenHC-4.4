@@ -184,7 +184,8 @@ class DimMediaClient(context: Context) {
                 albumCover2 = info.coverPath?.let { Uri.parse("file://$it") }
                 currentSource8 = " "
                 albumName9 = info.album
-                songTitle10 = info.title
+                // 拿不到手机侧真实元数据（515/517）：仪表盘标题固定显示「HiCar」。
+                songTitle10 = FIXED_TITLE
                 artistName11 = info.artist
                 sourceIcon17 = info.mediaType
             }
@@ -207,6 +208,9 @@ class DimMediaClient(context: Context) {
 
     private companion object {
         const val TAG = "OpenHC-Dim"
+
+        /** 仪表盘媒体标题固定为「HiCar」：当前车型拿不到手机侧真实媒体元数据。 */
+        const val FIXED_TITLE = "HiCar"
         const val SERVICE_PACKAGE = "com.ecarx.dim_interaction"
         const val SERVICE_CLASS = "com.ecarx.dim_interaction.server.DiServer"
         const val EXTRA_APP_TYPE = "app_type"

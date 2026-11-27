@@ -51,6 +51,16 @@ class DmsdpConfig(
     val keepAliveRetry: Int = 160,
     /** 加密选择应答里的 `Platform`。0 为普通平台。 */
     val platform: Int = 0,
+    /**
+     * 车机品牌图标的原始 PNG 字节（dataType 502）：手机连上后发 `{"brandIconData":"PNG"}` 来要，
+     * 车机必须把 PNG 二进制原样回给它（不是 JSON）。null（默认）表示没有图标，502 按未处理消息交出。
+     */
+    val brandIcon: ByteArray? = null,
+    /**
+     * 临时排查用：把手机发来的每一条设备记录（含已被正常处理的）原样交出
+     * （[DmsdpEvent.RecordDump]），默认关。查完改回 false。
+     */
+    val dumpDeviceRecords: Boolean = false,
 ) {
     val bluetoothMac: String = bluetoothMac.uppercase()
 
@@ -61,6 +71,12 @@ class DmsdpConfig(
         require(Ipv4Text.isCanonical(phoneIp)) { "phoneIp 必须是 IPv4 地址" }
         require(keepAliveRetry in 1..10_000) { "keepAliveRetry 超出范围" }
         require(platform in 0..9) { "platform 超出范围" }
+        brandIcon?.let { icon ->
+            require(icon.size >= PNG_SIGNATURE.size && PNG_SIGNATURE.indices.all { icon[it] == PNG_SIGNATURE[it] }) {
+                "brandIcon 必须是 PNG"
+            }
+            require(icon.size <= DeviceRecords.MAX_SEND_DATA) { "brandIcon 超过单条设备记录上限" }
+        }
         val ids = HashSet<String>()
         display?.let { ids += DISPLAY_SERVICE_ID }
         speaker?.let { ids += SPEAKER_SERVICE_ID }
@@ -220,6 +236,10 @@ class DmsdpConfig(
          * 播报前后发分流焦点消息）；策略串 `8:4096:1` 照实测能分流的取值，改了手机就不再按这个方式分。
          */
         const val MULTI_BUS_EXTEND_INFO = "{\"MultiAudioBusCap\":\"true\",\"MultiAudioBusPolicy\":\"8:4096:1\"}"
+
+        /** PNG 文件头，用来确认 [brandIcon] 是 PNG（手机只认 PNG）。 */
+        private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+
         private val MAC = Regex("([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}")
     }
 }

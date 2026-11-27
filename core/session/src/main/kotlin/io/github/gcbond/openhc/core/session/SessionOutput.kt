@@ -184,6 +184,34 @@ sealed class SessionEvent : SessionOutput {
         override fun toString() = "VideoStarted($video)"
     }
 
+    /**
+     * 手机把 HiCar 投屏切到后台（display 服务 action=202，例如点了 HiCar 界面里的车辆品牌图标要返回车机）：
+     * 连接继续，但界面应暂停投屏、显示车机自己的界面。
+     */
+    object DisplayPaused : SessionEvent() {
+        override fun toString() = "DisplayPaused"
+    }
+
+    /** 手机把 HiCar 投屏切回前台（display 服务 action=203）：界面应重新显示投屏画面。 */
+    object DisplayResumed : SessionEvent() {
+        override fun toString() = "DisplayResumed"
+    }
+
+    /** 手机回报的元数据能力（HiCar dataType 514 的应答），[json] 是原样正文。 */
+    class MetadataCapability(val module: Long, val json: String) : SessionEvent() {
+        override fun toString() = "MetadataCapability(module=$module, ${json.take(200)})"
+    }
+
+    /** 手机推送的音频元数据（HiCar dataType 515），[json] 是原样正文（`MediaData` 或 `ElapsedTime`）。 */
+    class MediaMetadata(val module: Long, val json: String) : SessionEvent() {
+        override fun toString() = "MediaMetadata(module=$module, ${json.take(160)})"
+    }
+
+    /** 手机推送的导航元数据（HiCar dataType 517），[json] 是原样正文（`type` + `navData`）。 */
+    class NavigationMetadata(val module: Long, val json: String) : SessionEvent() {
+        override fun toString() = "NavigationMetadata(module=$module, ${json.take(160)})"
+    }
+
     /** 不影响会话继续的信息：各层没处理的消息、被丢弃的数据、被忽略的请求等。[message] 可以直接写日志。 */
     class Diagnostic(val layer: SessionLayer, val message: String) : SessionEvent() {
         override fun toString() = "Diagnostic($layer: $message)"

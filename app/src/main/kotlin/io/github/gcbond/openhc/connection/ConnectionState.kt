@@ -162,6 +162,9 @@ sealed class ConnectionSignal {
     /** 解码器建不起来（没有能用的 H.264 解码器等），画面会一直黑着。 */
     data class DecoderProblem(val detail: String) : ConnectionSignal()
 
+    /** 用户从首页点「回到投屏画面」：清掉手机切走时的暂停标记，之后手机再点品牌图标还能触发暂停。 */
+    object ProjectionForeground : ConnectionSignal()
+
     /**
      * 这次连接已彻底收尾。[replugRequired]：这次插入发过 carInfo；[keepConnecting]：用户还要连接，
      * 拔线重插后自动再来。
@@ -186,6 +189,8 @@ data class ConnectionUiState(
     val firstFrame: Boolean = false,
     /** 回控已就绪（手机接受了 PLAY）且手机接受触摸：可以把触摸发给手机。 */
     val inputReady: Boolean = false,
+    /** 手机把 HiCar 投屏切到了后台（例如点了车辆品牌图标）：连接继续，界面应显示车机自己的首页。 */
+    val displayPaused: Boolean = false,
     /** 解码器报的画面尺寸，0 表示还不知道。 */
     val videoWidth: Int = 0,
     val videoHeight: Int = 0,
@@ -242,6 +247,8 @@ object ConnectionReducer {
         is ConnectionSignal.DecoderProblem ->
             if (state.phase in ATTEMPT_PHASES) state.copy(decoderProblem = signal.detail) else state
 
+        ConnectionSignal.ProjectionForeground -> state.copy(displayPaused = false)
+
         is ConnectionSignal.AttemptFinished -> onFinished(state, signal)
     }
 
@@ -296,6 +303,10 @@ object ConnectionReducer {
                 firstFrame = true,
                 video = event.video?.let(VideoInfo::of) ?: state.video,
             )
+            // 手机切走 / 切回 HiCar 投屏：只改界面要不要显示投屏，连接和阶段不动。
+            SessionEvent.DisplayPaused -> state.copy(displayPaused = true)
+            SessionEvent.DisplayResumed -> state.copy(displayPaused = false)
+            is SessionEvent.MetadataCapability, is SessionEvent.MediaMetadata, is SessionEvent.NavigationMetadata -> state
             is SessionEvent.Diagnostic -> state
             is SessionEvent.Ended -> stopping(state)
         }

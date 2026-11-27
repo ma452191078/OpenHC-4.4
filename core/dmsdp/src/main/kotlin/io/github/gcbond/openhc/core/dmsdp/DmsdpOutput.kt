@@ -229,6 +229,48 @@ sealed class DmsdpEvent : DmsdpOutput {
         }
     }
 
+    /**
+     * 临时排查用：手机发来的每一条设备记录都原样交出（不做截断）。
+     * [text] 是正文的 UTF-8 全文（正文不是可打印文本时给十六进制前缀）。
+     */
+    class RecordDump(val module: Long, val type: Int, val size: Int, val text: String) : DmsdpEvent() {
+        override fun toString() = "手机记录 module=$module type=$type $size 字节：$text"
+    }
+
+    /** 手机来要品牌图标（type 502），已把 [size] 字节的 PNG 原样回给它。 */
+    class BrandIconReplied(val module: Long, val size: Int) : DmsdpEvent() {
+        override fun toString() = "品牌图标已回传 module=$module $size 字节"
+    }
+
+    // ---------- 应用元数据（type 514 / 515）----------
+
+    /** 手机对元数据能力查询（type 514）的应答，[data] 是 JSON 正文（如 `{"ResponseAAData":{"MEDIA":true}}`）。 */
+    class MetadataCapability(val module: Long, data: ByteArray) : DmsdpEvent() {
+        val data: ByteArray = data.copyOf()
+
+        override fun toString() = "MetadataCapability(module=$module, ${String(this.data, Charsets.UTF_8).take(200)})"
+    }
+
+    /**
+     * 手机推送的音频元数据（type 515）：完整曲目信息（`MediaData`）或每秒一次的进度（`ElapsedTime`）。
+     * 已按协议自动回 `MediaDataResp`，调用方只看内容即可。
+     */
+    class MediaMetadata(val module: Long, data: ByteArray) : DmsdpEvent() {
+        val data: ByteArray = data.copyOf()
+
+        override fun toString() = "MediaMetadata(module=$module, ${String(this.data, Charsets.UTF_8).take(160)})"
+    }
+
+    /**
+     * 手机推送的导航元数据（HiCar dataType 517），[data] 是 JSON 正文（`type` + `navData`）。
+     * 已按协议自动回 `NavigationDataResp`，调用方只看内容即可。
+     */
+    class NavigationMetadata(val module: Long, data: ByteArray) : DmsdpEvent() {
+        val data: ByteArray = data.copyOf()
+
+        override fun toString() = "NavigationMetadata(module=$module, ${String(this.data, Charsets.UTF_8).take(160)})"
+    }
+
     // ---------- 音频数据会话（详情经 [io.github.gcbond.openhc.core.dmsdp.audio.AudioStreamListener] 交出）----------
 
     /** 手机对音频 SETUP 回了 200：数据会话已建立，手机随后应当连车机的数据端口。 */

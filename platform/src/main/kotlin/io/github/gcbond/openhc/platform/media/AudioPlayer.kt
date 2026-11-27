@@ -365,8 +365,8 @@ class AudioPlayer(
         }
         var done = 0
         while (done < length && !closed) {
-            // 4.4 fork：带写出模式的 write 是 21+ 的，更早的系统用阻塞的三参 write（本来就是阻塞写）。
-            val n = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            // 4.4 fork：带写出模式的 write（和 WRITE_BLOCKING）是 23+ 才有的，更早的系统用阻塞的三参 write。
+            val n = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 t.write(data, offset + done, length - done, AudioTrack.WRITE_BLOCKING)
             } else {
                 @Suppress("DEPRECATION")

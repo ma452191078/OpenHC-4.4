@@ -211,7 +211,7 @@ class WirelessReducerTest {
     }
 
     @Test
-    fun autoReconnectAttemptKeepsTheLastEndReasonAndTracksTheBeacon() {
+    fun autoReconnectAttemptKeepsTheLastEndReason() {
         val failed = WirelessEndReason.Failed(SessionStep.PHONE_JOIN, "合成：超时")
         val ended = run(*untilJoin, wireless(WirelessEvent.Ended(failed)), WirelessSignal.AttemptFinished(WirelessEndCause.Session(failed)))
 
