@@ -46,8 +46,8 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         multiDexEnabled = true
         // versionCode = 主版本 × 10000 + 次版本 × 100 + 补丁号。
-        versionCode = 2
-        versionName = "0.0.2"
+        versionCode = 3
+        versionName = "0.0.3"
     }
 
     sourceSets {
