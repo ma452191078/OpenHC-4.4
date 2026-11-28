@@ -241,6 +241,92 @@ class HiSightReceiverTest {
         }
     }
 
+    /** 鸿蒙 4.2 的手机在 ANNOUNCE 之后直接发能力查询、不发 OPTIONS：接受并照常完成协商。 */
+    @Test
+    fun capabilityQueryBeforeOptionsIsAccepted() {
+        val phone = Phone()
+        val s = session()
+        s.start()
+        s.feed(phone.frame("RTSP/1.0 200 OK\r\nCSeq: 1\r\n\r\n") +
+            phone.frame("ANNOUNCE * RTSP/1.0\r\nCSeq: 8\r\nContent-Type: text/parameters\r\nContent-Length: 55\r\n\r\nencrypt_description: encrypt_list=aes128ctr;version=1\r\n"))
+        phone.encrypted = true
+        val query = s.feed(phone.request("GET_PARAMETER", 9, "his_version\r\n"))
+        val note = query.filterIsInstance<HiSightOutput.Note>().single()
+        assertTrue("OPTIONS" in note.text, note.text)
+        val reply = query.filterIsInstance<HiSightOutput.Send>().single()
+        val plain = String(AesCtr(key).open(reply.bytes, 4, reply.bytes.size - 4), Charsets.US_ASCII)
+        assertTrue("his_version: 1.1" in plain, plain)
+
+        assertEquals(listOf("RTSP/1.0 200 OK#11"), phone.read(s.feed(
+            phone.request("SET_PARAMETER", 11, "his_video_formats: codecs 1;width 640;height 480;fps 30\r\n"))))
+        assertEquals(listOf("RTSP/1.0 200 OK#12", "SETUP * RTSP/1.0#2"), phone.read(s.feed(
+            phone.request("SET_PARAMETER", 12, "his_trigger_method: SETUP\r\n"))))
+        val setup = s.feed(phone.frame("RTSP/1.0 200 OK\r\nCSeq: 2\r\nTransport: RTP/AVP/UDP;unicast;server_port=5000\r\n\r\n"))
+        assertEquals(listOf(5000), setup.filterIsInstance<HiSightOutput.Connect>().map { it.port })
+        // 手机后来又补发 OPTIONS：照旧回 200 并发自己的 OPTIONS。
+        assertEquals(listOf("RTSP/1.0 200 OK#13", "OPTIONS * RTSP/1.0#3"), phone.read(s.feed(
+            phone.frame("OPTIONS * RTSP/1.0\r\nCSeq: 13\r\n\r\n"))))
+    }
+
+    /** 加密协商之前就来能力查询（明文）：明文回 200，之后的 ANNOUNCE 再切加密。 */
+    @Test
+    fun capabilityQueryBeforeAnnounceIsAccepted() {
+        val phone = Phone()
+        val s = session()
+        s.start()
+        val query = s.feed(phone.request("GET_PARAMETER", 9, "his_version\r\n"))
+        val note = query.filterIsInstance<HiSightOutput.Note>().single()
+        assertTrue("加密协商" in note.text, note.text)
+        assertEquals(listOf("RTSP/1.0 200 OK#9"), phone.read(query))
+
+        val announce = s.feed(phone.frame("ANNOUNCE * RTSP/1.0\r\nCSeq: 10\r\nContent-Type: text/parameters\r\nContent-Length: 55\r\n\r\nencrypt_description: encrypt_list=aes128ctr;version=1\r\n"))
+        assertEquals(listOf("RTSP/1.0 200 OK#10"), phone.read(announce))
+        phone.encrypted = true
+    }
+
+    /** 有的版本先发明文 OPTIONS、再发加密选择：两步都按顺序无关接受。 */
+    @Test
+    fun plaintextOptionsBeforeAnnounceIsAccepted() {
+        val phone = Phone()
+        val s = session()
+        s.start()
+        val options = s.feed(phone.frame("OPTIONS * RTSP/1.0\r\nCSeq: 9\r\n\r\n"))
+        assertTrue(options.any { it is HiSightOutput.Note && "明文 OPTIONS" in it.text })
+        assertEquals(listOf("RTSP/1.0 200 OK#9", "OPTIONS * RTSP/1.0#2"), phone.read(options))
+        s.feed(phone.frame("RTSP/1.0 200 OK\r\nCSeq: 2\r\n\r\n"))
+
+        val announce = s.feed(phone.frame("ANNOUNCE * RTSP/1.0\r\nCSeq: 10\r\nContent-Type: text/parameters\r\nContent-Length: 55\r\n\r\nencrypt_description: encrypt_list=aes128ctr;version=1\r\n"))
+        assertEquals(listOf("RTSP/1.0 200 OK#10"), phone.read(announce))
+        phone.encrypted = true
+        // 之后的加密能力查询照常应答。
+        val query = s.feed(phone.request("GET_PARAMETER", 11, "his_version\r\n"))
+        val reply = query.filterIsInstance<HiSightOutput.Send>().single()
+        val plain = String(AesCtr(key).open(reply.bytes, 4, reply.bytes.size - 4), Charsets.US_ASCII)
+        assertTrue("his_version: 1.1" in plain, plain)
+    }
+
+    /** 手机不发加密选择、直接开始加密：按密文自动识别；之后补发加密选择只作确认。 */
+    @Test
+    fun encryptionStartingWithoutAnnounceIsDetected() {
+        val phone = Phone()
+        val s = session()
+        s.start()
+        phone.encrypted = true
+        val query = s.feed(phone.request("GET_PARAMETER", 9, "his_version\r\n"))
+        val notes = query.filterIsInstance<HiSightOutput.Note>().map { it.text }
+        assertTrue(notes.any { "AES-CTR" in it }, notes.toString())
+        val reply = query.filterIsInstance<HiSightOutput.Send>().single()
+        val plain = String(AesCtr(key).open(reply.bytes, 4, reply.bytes.size - 4), Charsets.US_ASCII)
+        assertTrue("his_version: 1.1" in plain, plain)
+
+        val announce = s.feed(phone.frame("ANNOUNCE * RTSP/1.0\r\nCSeq: 10\r\nContent-Type: text/parameters\r\nContent-Length: 55\r\n\r\nencrypt_description: encrypt_list=aes128ctr;version=1\r\n"))
+        assertEquals(listOf("RTSP/1.0 200 OK#10"), phone.read(announce))
+        // 再发一次就是真的重复，仍然拒绝。
+        assertFailsWith<MalformedMessageException> {
+            s.feed(phone.frame("ANNOUNCE * RTSP/1.0\r\nCSeq: 11\r\nContent-Type: text/parameters\r\nContent-Length: 55\r\n\r\nencrypt_description: encrypt_list=aes128ctr;version=1\r\n"))
+        }
+    }
+
     /** 不认识的写法里万一带着密钥一类的长串，诊断说明里只写长度。 */
     @Test
     fun longTokensInAnAnnounceAreNotShown() {

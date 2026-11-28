@@ -22,8 +22,11 @@ import java.util.TimeZone
  *
  * 流程（三条连接都由车机主动连到手机）：
  * 1. 设备会话层告知 HiSight 端口后，连上控制连接，调用 [start]，把返回的明文 ANNOUNCE 发出去。
- * 2. 控制连接上收到的字节交给 [feedControl]。手机的 ANNOUNCE 选定加密后，后续每帧都是 AES-CTR；
- *    OPTIONS、能力查询（GET_PARAMETER）、能力选择和 SETUP 触发（SET_PARAMETER）都在这里应答。
+ * 2. 控制连接上收到的字节交给 [feedControl]。加密由手机的 ANNOUNCE 选定；也兼容不发加密选择、收到车机
+ *    ANNOUNCE 的 200 后直接加密的版本（按密文自动识别）。OPTIONS、能力查询（GET_PARAMETER）、能力选择和
+ *    SETUP 触发（SET_PARAMETER）都在这里应答。这些请求的先后顺序不固定（各手机版本发法不同），
+ *    OPTIONS 可以没有、可以晚到、可以在加密之前，能力请求也不要求先完成 OPTIONS 与加密协商，
+ *    都按收到即处理并写一条诊断说明；只有内容不合法（正文类型、能力取值、CSeq 对不上）才按协议错误结束。
  * 3. SETUP 应答到达时返回 [HiSightOutput.StreamNegotiated] 和 [HiSightOutput.Connect]：连视频端口，
  *    手机给了回控端口的话也要连。各自连上后调用 [onVideoConnected]、[onRemoteControlConnected]，
  *    需要的连接都就绪后会话才发 PLAY。
@@ -67,7 +70,11 @@ class HiSightReceiver(
     private val carryOver = ArrayList<HiSightOutput>()
     private var started = false
     private var cryptoReady = false
+    /** 加密是从手机的密文自动识别出来的：手机没发加密选择（ANNOUNCE）就直接开始 AES-CTR。 */
+    private var cryptoAutoDetected = false
     private var optionsReceived = false
+    /** 已经写过诊断说明的兼容点；同一个点只写一次，避免保活包重复刷日志。 */
+    private val noted = HashSet<String>()
     private var lastCseq = 0
     private var setup: MediaSetup? = null
     private var videoConnected = false
@@ -114,8 +121,7 @@ class HiSightReceiver(
                 decoder.append(data, offset, length)
                 while (!ended) {
                     val payload = decoder.next() ?: break
-                    val plain = if (cryptoReady) controlCipher.open(payload) else payload
-                    handle(RtspParser.parse(plain), out, wallClockMillis)
+                    handle(decodeControl(payload, out), out, wallClockMillis)
                 }
             } catch (e: Exception) {
                 failed = true
@@ -269,15 +275,46 @@ class HiSightReceiver(
     }
 
     /**
+     * 解一帧控制载荷。已协商加密时只按 AES-CTR 解；协商之前先按明文解析，解析不通再按密文解一次：
+     * 有的手机版本不回加密选择，收到车机 ANNOUNCE 的 200 后直接开始加密。密文必须解出合法的 RTSP
+     * 才认，认得之后从这里开始双向都按 AES-CTR；否则保留原来明文解析的错误说法。
+     */
+    private fun decodeControl(payload: ByteArray, out: MutableList<HiSightOutput>): RtspMessage {
+        if (cryptoReady) return RtspParser.parse(controlCipher.open(payload))
+        val plainError: MalformedMessageException
+        try {
+            return RtspParser.parse(payload)
+        } catch (e: MalformedMessageException) {
+            plainError = e
+        }
+        val decrypted = try {
+            RtspParser.parse(controlCipher.open(payload))
+        } catch (e: MalformedMessageException) {
+            throw plainError
+        }
+        cryptoReady = true
+        cryptoAutoDetected = true
+        note(out, "crypto-auto", "手机没有加密选择就直接开始 AES-CTR，已按密文识别，此后全程加密")
+        return decrypted
+    }
+
+    /** 兼容点的诊断说明，同一类只写一次。 */
+    private fun note(out: MutableList<HiSightOutput>, kind: String, text: String) {
+        if (noted.add(kind)) out += HiSightOutput.Note(text)
+    }
+
+    /**
      * 手机的 ANNOUNCE 选加密方式：正文里 `encrypt_description` 那一行，`encrypt_list` 里要有 aes128ctr，`version` 写了就得是 1；
      * 明文回 200 之后两个方向都切到 AES-CTR。
      *
      * 纯血鸿蒙发的正好一行：`encrypt_description: encrypt_list=aes128ctr;version=1` 加 CRLF。鸿蒙 4.x 的手机按「正好一行」
      * 的旧规则会被拒（2026-11 多份报告，原文没拿到），所以行数、换行符、结尾换行、多出来的字段和 `encrypt_list` 写成列表都放宽，
      * 不是标准格式时把正文交出来写日志（[HiSightOutput.Note]）；仍然拒绝时把正文带进报错（屏幕上的「协议错误」里能看到）。
+     *
+     * 加密已经按密文自动识别时（手机先加密、后补选加密方式），这一条只当确认，不再切换状态。
      */
     private fun handleAnnounce(message: RtspMessage, out: MutableList<HiSightOutput>, wallClockMillis: Long) {
-        if (cryptoReady || !message.isTextParameters) {
+        if ((cryptoReady && !cryptoAutoDetected) || !message.isTextParameters) {
             throw MalformedMessageException("ANNOUNCE 重复或类型不是 text/parameters")
         }
         if (message.body.any { it < 0 }) throw MalformedMessageException("加密选择正文含非 ASCII 字节（${message.body.size} 字节）")
@@ -302,13 +339,20 @@ class HiSightReceiver(
             fields.keys == setOf("encrypt_list", "version") && ciphers == listOf(AES128CTR)
         if (!standard) out += HiSightOutput.Note("手机的加密选择不是标准的一行格式，已按宽松规则接受：${visible(text)}")
         out += sendControl(RtspTemplates.ok(message.cseq, date(wallClockMillis)))
+        if (cryptoAutoDetected) note(out, "crypto-auto-confirmed", "加密已经生效，之后补到的加密选择只作确认")
+        cryptoAutoDetected = false
         cryptoReady = true
     }
 
+    /**
+     * 手机的 OPTIONS：只在收到时回 200 并发出本机的一次 OPTIONS（用来告诉手机本机支持的方法）。
+     * 加密协商之前的明文 OPTIONS 也接受，按顺序无关处理。
+     */
     private fun handleOptions(message: RtspMessage, out: MutableList<HiSightOutput>, wallClockMillis: Long) {
-        if (!cryptoReady || message.body.isNotEmpty() || optionsReceived) {
-            throw MalformedMessageException("OPTIONS 早于加密协商、带正文或重复")
+        if (message.body.isNotEmpty() || optionsReceived) {
+            throw MalformedMessageException("OPTIONS 带正文或重复")
         }
+        if (!cryptoReady) note(out, "options-plaintext", "手机在加密协商前发了明文 OPTIONS，已按顺序无关接受")
         val date = date(wallClockMillis)
         out += sendControl(RtspTemplates.ok(message.cseq, date, withPublic = true))
         val cseq = nextCseq()
@@ -319,7 +363,7 @@ class HiSightReceiver(
 
     /** 能力查询；空正文的 GET 是手机的保活，同样回 200。 */
     private fun handleGetParameter(message: RtspMessage, out: MutableList<HiSightOutput>) {
-        requireNegotiationReady(message)
+        requireNegotiationReady(message, out)
         val body = capabilities.responseBody(message.body)
         out += sendControl(RtspTemplates.getParameterOk(message.cseq, body))
     }
@@ -328,15 +372,15 @@ class HiSightReceiver(
         val fields = ParameterText.parameters(message.body)
         val trigger = fields[ParameterText.TRIGGER]
         if (trigger == "TEARDOWN") {
-            if (!cryptoReady) throw MalformedMessageException("结束触发早于加密协商")
             if (!message.isTextParameters || fields.size != 1) {
                 throw MalformedMessageException("结束触发必须是单独的 text/parameters 正文")
             }
+            if (!cryptoReady) note(out, "teardown-before-crypto", "手机在加密协商前要求结束投屏，已按顺序无关接受")
             out += sendControl(RtspTemplates.ok(message.cseq, date(wallClockMillis)))
             terminate(HiSightEndReason.PEER_TEARDOWN, out, sendTeardown = true, releaseInputs = true)
             return
         }
-        requireNegotiationReady(message)
+        requireNegotiationReady(message, out)
         if (trigger == null) {
             if (setup != null || SETUP in pending.values) throw MalformedMessageException("SETUP 之后不支持重新协商能力")
             capabilities.select(fields)
@@ -410,8 +454,18 @@ class HiSightReceiver(
         out += HiSightOutput.Ended(reason)
     }
 
-    private fun requireNegotiationReady(message: RtspMessage) {
-        if (!cryptoReady || !optionsReceived) throw MalformedMessageException("能力请求早于加密与 OPTIONS 协商")
+    /**
+     * 能力请求（GET_PARAMETER、能力选择）不强制先完成加密与 OPTIONS 协商：不同手机版本的发法不一样，
+     * 有的先 OPTIONS 再查能力，有的（鸿蒙 4.2 一类）直接查能力、不发或晚发 OPTIONS，有的连加密选择
+     * 都不单独发。这里按「收到什么就处理什么」接受，只写一条诊断说明；对端发的是明文（否则解不出来），
+     * 应答也走当前状态，之后的 ANNOUNCE 再切加密。能力正文本身的类型仍然严格校验。
+     */
+    private fun requireNegotiationReady(message: RtspMessage, out: MutableList<HiSightOutput>) {
+        if (!cryptoReady) {
+            note(out, "caps-before-crypto", "手机在加密协商前发了明文能力请求，已按顺序无关接受")
+        } else if (!optionsReceived) {
+            note(out, "caps-before-options", "手机的能力请求早于 OPTIONS，已按顺序无关接受")
+        }
         if (message.body.isNotEmpty() && !message.isTextParameters) {
             throw MalformedMessageException("能力正文缺少 text/parameters 类型")
         }
