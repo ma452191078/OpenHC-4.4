@@ -32,4 +32,15 @@
     <string name="settings_wireless_wired_only_note">「只用数据线连接」开着时，「自动连接手机」不起作用。</string>
     <string name="settings_wireless_connect_on_bt">自动连接手机（默认开）</string>
     <string name="settings_wireless_connect_on_bt_hint">手机蓝牙连上车机或打开 OpenHC 时，自动连接无线连接过的手机，无需扫码。需要悬浮窗权限；比亚迪车机还需在「选择禁止后台启动项」中放行 OpenHC。新手机请先扫码连接一次。</string>
+
+    <!-- 设置 → 设备管理 -->
+    <string name="settings_nav_devices">设备</string>
+    <string name="settings_devices_title">设备管理</string>
+    <string name="settings_devices_hint">配对成功过的设备按配对时间倒序排列，最近配对的在最前面；自动连接会优先连第一台。删除后需要重新扫码配对。</string>
+    <string name="settings_devices_empty">还没有配对成功的设备。用二维码扫码连接一次后，这里就会出现它。</string>
+    <string name="settings_devices_paired_at">配对时间：%1$s</string>
+    <string name="settings_devices_delete">删除</string>
+    <string name="settings_devices_delete_title">删除设备</string>
+    <string name="settings_devices_delete_message">删除「%1$s」后将不再自动连接它；需要时请重新扫码配对。</string>
+    <string name="settings_devices_deleted">已删除「%1$s」</string>
 </resources>

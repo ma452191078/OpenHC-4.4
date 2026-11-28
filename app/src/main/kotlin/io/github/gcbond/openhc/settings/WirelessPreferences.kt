@@ -47,15 +47,73 @@ class WirelessPreferences(context: Context) {
     /** 最近一次用无线连成功的手机（大写的蓝牙地址）：打开本应用时拨它。 */
     val lastPhone: String? get() = knownPhoneList.lastOrNull()
 
-    /** 记下一台连成功的手机，当作最近那台；最多记 [MAX_KNOWN_PHONES] 台，多了丢掉最早的。返回这台手机是不是第一次记下。 */
+    /**
+     * 配对成功过的设备，按配对（最近一次连成功）时间倒序，最近那台在最前，即 [lastPhone] 那台。
+     * 「设置 → 设备」用它列出来给车主看、删。
+     */
+    val pairedDevices: List<PairedDevice>
+        get() = knownPhoneList.asReversed().map { address ->
+            PairedDevice(
+                address = address,
+                name = prefs.getString(nameKey(address), null)?.takeIf { it.isNotBlank() },
+                pairedAtMillis = prefs.getLong(timeKey(address), 0L),
+            )
+        }
+
+    /**
+     * 记下一台连成功的手机，当作最近那台；最多记 [MAX_KNOWN_PHONES] 台，多了丢掉最早的。
+     * [name] 是这台手机读得到的蓝牙名称（可为空），[nowMillis] 是这次配对（连成功）的时间。
+     * 返回这台手机是不是第一次记下。
+     */
     @Synchronized
-    fun rememberPhone(address: String): Boolean {
+    fun rememberPhone(
+        address: String,
+        name: String? = null,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): Boolean {
         val key = address.trim().uppercase()
         val known = knownPhoneList
-        val next = (known - key + key).takeLast(MAX_KNOWN_PHONES)
-        prefs.edit { putString(KEY_KNOWN_PHONES, next.joinToString(",")) }
-        return key !in known
+        val next = (known.filterNot { it.equals(key, ignoreCase = true) } + key).takeLast(MAX_KNOWN_PHONES)
+        val dropped = known.filter { kept -> next.none { it.equals(kept, ignoreCase = true) } }
+        prefs.edit {
+            putString(KEY_KNOWN_PHONES, next.joinToString(","))
+            putLong(timeKey(key), nowMillis)
+            if (!name.isNullOrBlank()) putString(nameKey(key), name.trim())
+            dropped.forEach {
+                remove(nameKey(it))
+                remove(timeKey(it))
+            }
+        }
+        return key !in known.map { it.uppercase() }
     }
+
+    /**
+     * 删除一台配对过的手机（设置里的「设备管理」）：不再自动连它，需要时重新扫码配对。
+     * 返回是否真的删掉了一台。
+     */
+    @Synchronized
+    fun forgetPhone(address: String): Boolean {
+        val key = address.trim().uppercase()
+        val known = knownPhoneList
+        val next = known.filterNot { it.equals(key, ignoreCase = true) }
+        if (next.size == known.size) return false
+        prefs.edit {
+            putString(KEY_KNOWN_PHONES, next.joinToString(","))
+            remove(nameKey(key))
+            remove(timeKey(key))
+        }
+        return true
+    }
+
+    /** 配对成功过的一台设备。 */
+    data class PairedDevice(
+        /** 大写的蓝牙地址，删除时用。 */
+        val address: String,
+        /** 配对时读到的蓝牙名称；老记录或读不到时为 null。 */
+        val name: String?,
+        /** 最近一次连成功的时间（毫秒）；老记录没有时为 0。 */
+        val pairedAtMillis: Long,
+    )
 
     companion object {
         private const val FILE = "openhc-wireless"
@@ -64,8 +122,16 @@ class WirelessPreferences(context: Context) {
         private const val KEY_CONNECT_ON_BLUETOOTH = "connect_on_bluetooth"
         private const val KEY_KNOWN_PHONES = "known_phones"
 
+        /** 每台设备另存的名称、配对时间（按蓝牙地址做键，避免把名字、时间挤进地址列表里要转义）。 */
+        private const val KEY_DEVICE_NAME_PREFIX = "device_name_"
+        private const val KEY_DEVICE_PAIRED_AT_PREFIX = "device_paired_at_"
+
+        private fun nameKey(address: String): String = KEY_DEVICE_NAME_PREFIX + address.trim().uppercase()
+
+        private fun timeKey(address: String): String = KEY_DEVICE_PAIRED_AT_PREFIX + address.trim().uppercase()
+
         /** 「连成功过的手机」最多记几台。 */
-        const val MAX_KNOWN_PHONES = 5
+        const val MAX_KNOWN_PHONES = 20
 
         /**
          * 系统支持「WiFi 直连」这种无线方式：安卓 10（API 29）起——组的真实频率要到 29 才读得回

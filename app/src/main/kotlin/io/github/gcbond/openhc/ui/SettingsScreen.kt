@@ -35,8 +35,8 @@ internal class SettingsScreen(
     private val onBack: () -> Unit,
 ) : LinearLayout(context), SectionHost {
 
-    /** 左导航的八个段。 */
-    private enum class Nav { PICTURE, BRAND, AUDIO, WIRELESS, BOOT, CONNECTION, UPDATE, DIAG }
+    /** 左导航的九个段。 */
+    private enum class Nav { PICTURE, BRAND, AUDIO, WIRELESS, DEVICES, BOOT, CONNECTION, UPDATE, DIAG }
 
     private val settings = AppSettings(context)
     private val host = ActivitySectionHost(context as Activity)
@@ -49,6 +49,7 @@ internal class SettingsScreen(
     private var brand: BrandSection? = null
     private var audio: AudioSection? = null
     private var wireless: WirelessSection? = null
+    private var devices: DeviceManagerSection? = null
     private var boot: BootStartSection? = null
     private var usbAutoConnect: UsbAutoConnectGroup? = null
     private var update: UpdateSection? = null
@@ -143,6 +144,7 @@ internal class SettingsScreen(
         brand = null
         audio = null
         wireless = null
+        devices = null
         boot = null
         usbAutoConnect = null
         update = null
@@ -167,6 +169,11 @@ internal class SettingsScreen(
             Nav.WIRELESS -> {
                 val section = WirelessSection(context)
                 wireless = section
+                content.addView(section, sectionParams(0f))
+            }
+            Nav.DEVICES -> {
+                val section = DeviceManagerSection(context)
+                devices = section
                 content.addView(section, sectionParams(0f))
             }
             Nav.BOOT -> {
@@ -201,6 +208,7 @@ internal class SettingsScreen(
             add(Triple(Nav.AUDIO, context.getString(R.string.settings_nav_audio), "icons/nav_audio.svg"))
             if (wirelessAvailable) {
                 add(Triple(Nav.WIRELESS, context.getString(R.string.settings_nav_wireless), "icons/mode_wireless.svg"))
+                add(Triple(Nav.DEVICES, context.getString(R.string.settings_nav_devices), "icons/link.svg"))
             }
             add(Triple(Nav.BOOT, context.getString(R.string.settings_boot_title), "icons/nav_boot.svg"))
             // 「连接方式」暂时隐藏，不在菜单里露出；对应段落代码保留，需要时把这一项加回来即可。
