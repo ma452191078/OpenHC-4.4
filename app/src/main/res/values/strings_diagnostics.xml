@@ -8,4 +8,10 @@
     <string name="settings_diag_exporting">正在导出…</string>
     <string name="settings_diag_saved">已保存：%1$s。报告问题时请附上该文件（可拷到 U 盘再上传）。</string>
     <string name="settings_diag_failed">没导出来：%1$s</string>
+    <string name="settings_diag_upload">上传诊断日志</string>
+    <string name="settings_diag_upload_hint">一键传给开发者（与导出相同的脱敏规则）。上传后会给出一个 6 位取件码，把它发给开发者即可，不用导出文件。需要车机当前能上网。</string>
+    <string name="settings_diag_upload_button">上传</string>
+    <string name="settings_diag_uploading">正在上传…</string>
+    <string name="settings_diag_uploaded">已上传。把这个 6 位取件码发给开发者：%1$s</string>
+    <string name="settings_diag_upload_failed">没传上去：%1$s</string>
 </resources>

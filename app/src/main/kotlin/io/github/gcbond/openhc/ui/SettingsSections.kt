@@ -2,6 +2,8 @@ package io.github.gcbond.openhc.ui
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
+import android.bluetooth.BluetoothAdapter
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
@@ -28,6 +30,7 @@ import io.github.gcbond.openhc.connection.DisplayPlan
 import io.github.gcbond.openhc.connection.UsbAutoConnect
 import io.github.gcbond.openhc.connection.VideoClarity
 import io.github.gcbond.openhc.diagnostics.DiagnosticsExport
+import io.github.gcbond.openhc.diagnostics.DiagnosticsUploader
 import io.github.gcbond.openhc.dim.DimMediaInfo
 import io.github.gcbond.openhc.platform.media.AudioPreview
 import io.github.gcbond.openhc.platform.media.AudioStreamChoice
@@ -404,6 +407,101 @@ internal class WirelessSection(private val context: Context) : LinearLayout(cont
             }
         }
         return strip
+    }
+}
+
+/**
+ * 「设备管理」一段：列出配对成功过的所有手机（无线投屏连成功过），按配对时间倒序，最近那台在最前。
+ * 自动连接手机时会优先连最前面那台。每台可删除；删除后车机不再自动连它，需要时重新扫码配对。
+ * 只读写 [WirelessPreferences]（和自动回连共用同一份记录），不碰正在运行的连接。
+ */
+internal class DeviceManagerSection(private val context: Context) : LinearLayout(context) {
+    private val preferences = WirelessPreferences(context)
+    private val timeFormat = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT)
+
+    init {
+        orientation = VERTICAL
+        rebuild()
+    }
+
+    fun rebuild() {
+        removeAllViews()
+        val group = SettingsGroup(context, context.getString(R.string.settings_devices_title))
+        val devices = preferences.pairedDevices
+        if (devices.isEmpty()) {
+            group.row { addView(rowNote(context, context.getString(R.string.settings_devices_empty))) }
+        } else {
+            group.row { addView(rowDescription(context, context.getString(R.string.settings_devices_hint))) }
+            devices.forEach { device -> addDeviceRow(group, device) }
+        }
+        addView(group)
+    }
+
+    private fun addDeviceRow(group: SettingsGroup, device: WirelessPreferences.PairedDevice) {
+        val name = deviceName(device)
+        group.row {
+            val line = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+            }
+            val texts = LinearLayout(context).apply { orientation = LinearLayout.VERTICAL }
+            texts.addView(rowTitle(context, name))
+            texts.addView(rowDescription(context, device.address))
+            if (device.pairedAtMillis > 0) {
+                texts.addView(
+                    rowDescription(
+                        context,
+                        context.getString(R.string.settings_devices_paired_at, timeFormat.format(Date(device.pairedAtMillis))),
+                    ),
+                )
+            }
+            line.addView(
+                texts,
+                LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 1f },
+            )
+            line.addView(
+                actionButton(context, context.getString(R.string.settings_devices_delete), ActionKind.DANGER) {
+                    confirmDelete(device, name)
+                },
+                LinearLayout.LayoutParams(
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                    android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                ).apply {
+                    marginStart = context.dp(12f)
+                },
+            )
+            addView(line)
+        }
+    }
+
+    /** 删除前确认：车机触屏容易误点，删了不会自动连，得重新扫码。 */
+    private fun confirmDelete(device: WirelessPreferences.PairedDevice, name: String) {
+        AlertDialog.Builder(context)
+            .setTitle(R.string.settings_devices_delete_title)
+            .setMessage(context.getString(R.string.settings_devices_delete_message, name))
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.settings_devices_delete) { _, _ ->
+                if (preferences.forgetPhone(device.address)) {
+                    Toast.makeText(context, context.getString(R.string.settings_devices_deleted, name), Toast.LENGTH_SHORT).show()
+                }
+                rebuild()
+            }
+            .show()
+    }
+
+    /** 显示名：优先用配对时记下的名称，其次现场读蓝牙名称，都读不到就显示地址。 */
+    private fun deviceName(device: WirelessPreferences.PairedDevice): String {
+        device.name?.takeIf { it.isNotBlank() }?.let { return it }
+        return try {
+            @Suppress("DEPRECATION")
+            BluetoothAdapter.getDefaultAdapter()
+                ?.getRemoteDevice(device.address)
+                ?.name
+                ?.takeIf { it.isNotBlank() }
+                ?: device.address
+        } catch (e: RuntimeException) {
+            device.address
+        }
     }
 }
 
@@ -926,11 +1024,13 @@ private fun previewNote(context: Context, result: AudioPreview.Result): PreviewN
         PreviewNote(context.getString(R.string.settings_audio_preview_stream, result.stream), warn = false)
 }
 
-/** 「诊断」一组：导出诊断日志到文件（阻塞，放后台线程，完事回界面线程）。 */
+/** 「诊断」一组：导出/上传诊断日志（都阻塞，放后台线程，完事回界面线程）。 */
 internal class DiagnosticsSection(private val context: Context) : LinearLayout(context) {
     private val main = Handler(Looper.getMainLooper())
     private var busy = false
+    private var uploading = false
     private var note: PreviewNote? = null
+    private var uploadNote: PreviewNote? = null
 
     /** 调试包的仪表盘推送测试：轮换几条示例，方便在车机上看仪表盘是否跟着变。 */
     private var dimDemoIndex = 0
@@ -961,6 +1061,30 @@ internal class DiagnosticsSection(private val context: Context) : LinearLayout(c
             )
             addView(line)
             note?.let { addView(rowNote(context, it.text, it.warn)) }
+        }
+        if (BuildConfig.QINIU_BUCKET.isNotBlank() && BuildConfig.QINIU_ACCESS_KEY.isNotBlank() && BuildConfig.QINIU_SECRET_KEY.isNotBlank()) {
+            group.row {
+                val line = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL }
+                line.addView(
+                    rowHeader(
+                        context,
+                        context.getString(R.string.settings_diag_upload),
+                        context.getString(R.string.settings_diag_upload_hint),
+                    ),
+                    LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT).apply { weight = 1f },
+                )
+                line.addView(
+                    actionButton(
+                        context,
+                        context.getString(
+                            if (uploading) R.string.settings_diag_uploading else R.string.settings_diag_upload_button,
+                        ),
+                        enabled = !uploading,
+                    ) { startUpload() },
+                )
+                addView(line)
+                uploadNote?.let { addView(rowNote(context, it.text, it.warn)) }
+            }
         }
         if (BuildConfig.DEBUG) {
             group.row {
@@ -999,6 +1123,27 @@ internal class DiagnosticsSection(private val context: Context) : LinearLayout(c
         )
         dimNote = "已推送：${demo.first}（媒体类型 6 在线）"
         rebuild()
+    }
+
+    private fun startUpload() {
+        if (uploading) return
+        uploading = true
+        uploadNote = null
+        rebuild()
+        val app = context.applicationContext ?: context
+        Thread({
+            val result = DiagnosticsUploader.upload(app)
+            main.post {
+                uploading = false
+                uploadNote = when (result) {
+                    is DiagnosticsUploader.Result.Uploaded ->
+                        PreviewNote(context.getString(R.string.settings_diag_uploaded, result.code), warn = false)
+                    is DiagnosticsUploader.Result.Failed ->
+                        PreviewNote(context.getString(R.string.settings_diag_upload_failed, result.reason), warn = true)
+                }
+                rebuild()
+            }
+        }, "OpenHC-DiagUpload").start()
     }
 
     private fun startExport() {

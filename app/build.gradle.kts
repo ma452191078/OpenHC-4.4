@@ -48,6 +48,33 @@ android {
         // versionCode = 主版本 × 10000 + 次版本 × 100 + 补丁号。
         versionCode = 3
         versionName = "0.0.3"
+        // 诊断上传的七牛云收件桶（local.properties，不进仓库）：
+        //   openhc.qiniu.accessKey   七牛 Access Key
+        //   openhc.qiniu.secretKey   七牛 Secret Key
+        //   openhc.qiniu.bucket      收诊断日志的 bucket（私有即可，凭码找文件）
+        //   openhc.qiniu.uploadHost  上传域名（可选，默认 https://upload.qiniup.com；
+        //                            bucket 在其他区域时换成 up-z1/up-z2 等对应域名）
+        // 没配时设置页不显示上传入口。AK/SK 打进 APK 可被提取，建议用只绑定收桶的密钥对，泄露就换。
+        buildConfigField(
+            "String",
+            "QINIU_ACCESS_KEY",
+            "\"${localProperties.getProperty("openhc.qiniu.accessKey")?.trim() ?: ""}\"",
+        )
+        buildConfigField(
+            "String",
+            "QINIU_SECRET_KEY",
+            "\"${localProperties.getProperty("openhc.qiniu.secretKey")?.trim() ?: ""}\"",
+        )
+        buildConfigField(
+            "String",
+            "QINIU_BUCKET",
+            "\"${localProperties.getProperty("openhc.qiniu.bucket")?.trim() ?: ""}\"",
+        )
+        buildConfigField(
+            "String",
+            "QINIU_UPLOAD_HOST",
+            "\"${localProperties.getProperty("openhc.qiniu.uploadHost")?.trim() ?: "https://upload.qiniup.com"}\"",
+        )
     }
 
     sourceSets {

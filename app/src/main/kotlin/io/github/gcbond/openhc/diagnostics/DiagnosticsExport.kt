@@ -15,6 +15,7 @@ import io.github.gcbond.openhc.connection.UsbAutoConnect
 import io.github.gcbond.openhc.settings.WirelessPreferences
 import io.github.gcbond.openhc.startup.BootStart
 import io.github.gcbond.openhc.wireless.WirelessPermissions
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -89,6 +90,13 @@ internal object DiagnosticsExport {
         val file = File(dir, name)
         FileOutputStream(file).use { writeReport(app, it, now) }
         return Result.Saved(file.absolutePath)
+    }
+
+    /** 报告的内存版（诊断上传用）：内容与文件版完全一致（同样脱敏）。阻塞，别在界面线程上调。 */
+    internal fun buildReport(app: Context, now: Date): ByteArray {
+        val out = ByteArrayOutputStream()
+        writeReport(app, out, now)
+        return out.toByteArray()
     }
 
     private fun writeReport(app: Context, out: OutputStream, now: Date) {
