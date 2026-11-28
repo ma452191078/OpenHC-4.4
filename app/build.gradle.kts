@@ -46,8 +46,8 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         multiDexEnabled = true
         // versionCode = 主版本 × 10000 + 次版本 × 100 + 补丁号。
-        versionCode = 3
-        versionName = "0.0.3"
+        versionCode = 4
+        versionName = "0.0.4"
         // 诊断上传的七牛云收件桶（local.properties，不进仓库）：
         //   openhc.qiniu.accessKey   七牛 Access Key
         //   openhc.qiniu.secretKey   七牛 Secret Key
