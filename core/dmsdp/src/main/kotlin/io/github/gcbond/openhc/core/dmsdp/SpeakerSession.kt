@@ -66,6 +66,9 @@ internal class SpeakerSession(
     private var check: PcmCheck? = null
     private val router = AudioRouter(speaker.multiBus)
 
+    /** 连续多少个数据会话发了 SETUP 而手机没应答（应答一次、或没发 SETUP 就清零）；见 [AudioEvent.SetupUnanswered]。 */
+    private var unansweredSetups = 0
+
     private inner class Stream(val info: AudioStreamInfo) {
         /** 数据端口；0 表示还没开好（SETUP 还没发）。 */
         var port = 0
@@ -342,8 +345,9 @@ internal class SpeakerSession(
         val cseq = nextCSeq()
         setups[cseq.toString()] = stream
         stream.setupAtMillis = nowMillis
-        sendText(setupMessage(stream.info.dataSessionId, cseq, stream.port, stream.info.transport, stream.info.codec), target)
-        emit(AudioEvent.SetupSent(stream.info, stream.port, cseq, stream.info.codec))
+        val message = setupMessage(stream.info.dataSessionId, cseq, stream.port, stream.info.transport, stream.info.codec)
+        sendText(message, target)
+        emit(AudioEvent.SetupSent(stream.info, stream.port, cseq, stream.info.codec, message))
     }
 
     private fun end(stream: Stream, reason: AudioEndReason) {
@@ -354,6 +358,9 @@ internal class SpeakerSession(
         if (reason != AudioEndReason.SESSION_CLOSED) out?.add(DmsdpAction.CloseAudioTransport)
         out?.event(DmsdpEvent.AudioSessionTornDown(stream.info.dataSessionId, reason.label))
         emit(AudioEvent.Ended(stream.info, reason, summary(stream)))
+        // 发了 SETUP 而手机始终没应答：连续多次就是「连上没声音」的已知表现，交上层决定要不要重连。
+        unansweredSetups = if (stream.port != 0 && stream.answer == null) unansweredSetups + 1 else 0
+        if (unansweredSetups > 0) emit(AudioEvent.SetupUnanswered(stream.info, unansweredSetups))
     }
 
     private fun summary(stream: Stream): AudioSummary {

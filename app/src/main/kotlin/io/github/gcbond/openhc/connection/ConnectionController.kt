@@ -424,9 +424,11 @@ class ConnectionController(context: Context) {
          * 声音出口：音频回调在协议线程上，收尾时在执行器停下之后关。车机这边的焦点变化（别的应用抢走焦点等）
          * 投到协议线程上发给手机；媒体焦点拿着与否报给 [MediaKeys]（媒体按钮会话跟着它建和关）。
          */
-        val audio: AudioOutput = AudioOutput(app, id, mediaFocusChanged = { held -> MediaKeys.mediaFocus(keys, held) }) { change ->
-            runner.submit { session.sendAudioFocus(change) }
-        }
+        val audio: AudioOutput = AudioOutput(
+            app, id,
+            mediaFocusChanged = { held -> MediaKeys.mediaFocus(keys, held) },
+            tellPhone = { change -> runner.submit { session.sendAudioFocus(change) } },
+        )
 
         /** 车机麦克风入口：麦克风回调在协议线程上，采到的声音经执行器投回协议线程送出；收尾时同样在执行器停下之后关。 */
         val mic: MicInput = MicInput(app, id)

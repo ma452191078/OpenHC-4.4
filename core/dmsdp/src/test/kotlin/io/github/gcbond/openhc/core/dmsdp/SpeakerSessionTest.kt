@@ -234,7 +234,9 @@ class SpeakerSessionTest {
                 "Transport: RTP/AVP/UDP;unicast;client_port=40100--1\r\n\r\n",
             text(setup.single()),
         )
-        assertEquals(2, audio.only<AudioEvent.SetupSent>().cseq)
+        val sent = audio.only<AudioEvent.SetupSent>()
+        assertEquals(2, sent.cseq)
+        assertEquals(text(setup.single()), String(sent.message), "事件里的原始字节就是发出的 SETUP 报文")
     }
 
     @Test
@@ -308,6 +310,31 @@ class SpeakerSessionTest {
         // 不认识的会话也回 200。
         val stray = session.feed(DmsdpChannel.CONTROL, trigger("TEARDOWN", sessionId = "78", cseq = "7"), 9_200)
         assertTrue(text(stray.single()).contains("DataSessionID: 78\r\nCSeq: 7\r\n"))
+    }
+
+    @Test
+    fun consecutiveUnansweredSetupsAreCountedAndAnswerResetsTheStreak() {
+        val audio = AudioRecorder()
+        val session = toSetupSent(audio)
+        // 第一轮：手机不应答，过几秒自己拆掉（无声音时的已知循环）。
+        session.feed(DmsdpChannel.CONTROL, trigger("TEARDOWN", cseq = "6"), 9_000)
+        assertEquals(1, audio.only<AudioEvent.SetupUnanswered>().consecutive)
+        // 第二轮：换一个会话再触发，还是不应答，连续计数加一。
+        session.feed(DmsdpChannel.CONTROL, trigger("OPTIONS", sessionId = "90", cseq = "7"), 9_100)
+        session.audioListenersReady(40200, 9_150)
+        session.feed(DmsdpChannel.CONTROL, trigger("TEARDOWN", sessionId = "90", cseq = "8"), 17_000)
+        assertEquals(2, audio.events.filterIsInstance<AudioEvent.SetupUnanswered>().last().consecutive)
+        // 第三轮：这次应答了，计数清零；再无应答时从 1 重数。（应答的 CSeq 取实际发出的 SETUP 的，保活会共用计数器。）
+        session.feed(DmsdpChannel.CONTROL, trigger("OPTIONS", sessionId = "91", cseq = "9"), 17_100)
+        session.audioListenersReady(40300, 17_150)
+        val setupCSeq = audio.events.filterIsInstance<AudioEvent.SetupSent>().last().cseq
+        session.feed(DmsdpChannel.CONTROL, phone.encryptedText("DMSDP/1.0 200 OK\r\nCSeq: $setupCSeq\r\n\r\n"), 17_200)
+        session.feed(DmsdpChannel.CONTROL, trigger("TEARDOWN", sessionId = "91", cseq = "10"), 18_000)
+        // 第四轮：无应答，从 1 重数。
+        session.feed(DmsdpChannel.CONTROL, trigger("OPTIONS", sessionId = "92", cseq = "11"), 18_100)
+        session.audioListenersReady(40400, 18_150)
+        session.feed(DmsdpChannel.CONTROL, trigger("TEARDOWN", sessionId = "92", cseq = "12"), 26_000)
+        assertEquals(1, audio.events.filterIsInstance<AudioEvent.SetupUnanswered>().last().consecutive)
     }
 
     @Test

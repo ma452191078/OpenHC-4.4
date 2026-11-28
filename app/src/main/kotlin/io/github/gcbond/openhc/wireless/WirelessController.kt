@@ -231,6 +231,12 @@ class WirelessController(
     /** 掉流重连前的等待（让上一次连接收尾完）。 */
     private val STALL_RETRY_DELAY_MS = 3_000L
 
+    /**
+     * 连续多少个音频数据会话手机都没应答 SETUP 就判音频通道死了（手机侧建发送端失败的已知表现，一轮约 8 秒，
+     * 5 次约 40 秒）：结束本次连接、自动重连，重连后多半恢复。连线一直没声音比断开重连一次体验好。
+     */
+    private val AUDIO_DEAD_THRESHOLD = 5
+
     /** 投屏中定时看有没有视频数据；手机停发时先提示、再自动重连一次。 */
     private val videoStallWatch = object : Runnable {
         override fun run() {
@@ -881,6 +887,13 @@ class WirelessController(
         }
     }
 
+    /** 读手机的蓝牙名称（「设置 → 设备」里显示用）；读不到或没权限返回 null，不影响连接。 */
+    private fun phoneName(address: String): String? = try {
+        BluetoothStatus.adapter(app)?.getRemoteDevice(address)?.name?.takeIf { it.isNotBlank() }
+    } catch (e: RuntimeException) {
+        null
+    }
+
     /**
      * 车机主动回连（任意线程）：马上拨蓝牙地址为 [address] 的手机，不看「自动连接手机」开关和记录。给调试入口用；
      * 真的拨出去了同样计入冷却和这次蓝牙连接（[ReconnectTriggers.commitDial]，在 [begin] 里记）。
@@ -1090,6 +1103,9 @@ class WirelessController(
 
         /** 投屏中手机停发视频太久：结束本次连接，稍后自动重连一次。 */
         VIDEO_STALL,
+
+        /** 音频通道死了（连续多个数据会话手机都没应答 SETUP，一直没声音）：结束本次连接，稍后自动重连一次。 */
+        AUDIO_DEAD,
     }
 
     private inner class Attempt(
@@ -1134,7 +1150,9 @@ class WirelessController(
         val audio: AudioOutput = AudioOutput(
             app, AUDIO_ID_BASE + id,
             mediaFocusChanged = { held -> MediaKeys.mediaFocus(keys, held) },
-        ) { change -> runner.submit { bridge.sendAudioFocus(change) } }
+            tellPhone = { change -> runner.submit { bridge.sendAudioFocus(change) } },
+            onChannelSuspect = { consecutive -> onAudioChannelSuspect(this, consecutive) },
+        )
         val session: WirelessReceiverSession = WirelessReceiverSession(config, sink, audio)
         private val results = RunnerResults()
         val executor = WirelessPlatformExecutor(
@@ -1255,7 +1273,9 @@ class WirelessController(
             is SessionEvent.VideoStarted -> {
                 current.projected = true
                 current.phoneAddress?.let { address ->
-                    if (wirelessPrefs.rememberPhone(address)) Log.i(TAG, "记下连成功的手机（${MacText.mask(address)}），之后会自动连它")
+                    if (wirelessPrefs.rememberPhone(address, phoneName(address))) {
+                        Log.i(TAG, "记下连成功的手机（${MacText.mask(address)}），之后会自动连它")
+                    }
                 }
             }
             is SessionEvent.VideoNegotiated -> {
@@ -1369,6 +1389,18 @@ class WirelessController(
         maybeFinish(current)
     }
 
+    /**
+     * 音频通道疑似死了：投屏还活着但连续 [AUDIO_DEAD_THRESHOLD] 个数据会话手机都没应答 SETUP（一直没声音）。
+     * 投屏动着不好让用户自己发现没声音，这里结束本次连接、收尾后自动拨回同一台手机（见 [afterAttempt]）。
+     * 音频回调在协议线程上：收尾要等执行器，投到主线程做（和掉流重连一样）。
+     */
+    private fun onAudioChannelSuspect(current: Attempt, consecutive: Int) {
+        if (consecutive < AUDIO_DEAD_THRESHOLD || current.tearingDown) return
+        Log.w(TAG, "连续 $consecutive 个音频会话手机都没有应答 SETUP，音频通道多半已坏：结束本次连接并重连")
+        current.stopReason = StopReason.AUDIO_DEAD
+        handler.post { teardown(current) }
+    }
+
     private fun maybeFinish(current: Attempt) {
         if (current.finished || !current.tearingDown || !current.runner.isTerminated) return
         current.finished = true
@@ -1397,13 +1429,14 @@ class WirelessController(
             beginReconnect(pending.address, pending.why, preemptWired = false)
             return
         }
-        // 掉流重连：等上一次收尾完再拨同一台手机（不看「自动连接手机」开关，避免用户等不到画面）。
-        if (current.stopReason == StopReason.VIDEO_STALL) {
+        // 掉流/音频不通重连：等上一次收尾完再拨同一台手机（不看「自动连接手机」开关，避免用户等不到画面）。
+        if (current.stopReason == StopReason.VIDEO_STALL || current.stopReason == StopReason.AUDIO_DEAD) {
             val address = current.phoneAddress
             if (address != null) {
-                Log.i(TAG, "视频中断后重连：${MacText.mask(address)}")
+                val why = if (current.stopReason == StopReason.VIDEO_STALL) "视频中断后重连" else "音频不通后重连"
+                Log.i(TAG, "$why：${MacText.mask(address)}")
                 handler.postDelayed({
-                    if (attempt == null) reconnectPhone(address, "视频中断后重连")
+                    if (attempt == null) reconnectPhone(address, why)
                 }, STALL_RETRY_DELAY_MS)
             }
         }

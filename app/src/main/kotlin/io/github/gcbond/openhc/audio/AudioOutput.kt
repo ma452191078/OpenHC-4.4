@@ -43,6 +43,8 @@ internal class AudioOutput(
     private val mediaFocusChanged: (Boolean) -> Unit = {},
     /** 把车机的焦点变化告诉手机（实现方投到协议线程上发）。 */
     private val tellPhone: (CarAudioFocus) -> Unit,
+    /** 音频通道疑似已坏（[AudioEvent.SetupUnanswered] 的连续计数）：实现方决定要不要结束连接重连。 */
+    private val onChannelSuspect: (Int) -> Unit = {},
 ) : AudioStreamListener, Closeable {
     private val app: Context = context.applicationContext ?: context
     private val lock = Any()
@@ -121,6 +123,7 @@ internal class AudioOutput(
             is AudioEvent.StreamRouted ->
                 if (event.unknownUsage) Log.w(TAG, "[$attemptId] SSRC ${event.ssrc} 带的用途 ${event.usage} 不认识，按媒体放")
             is AudioEvent.CodecVerdict -> onVerdict(event)
+            is AudioEvent.SetupUnanswered -> onChannelSuspect(event.consecutive)
             is AudioEvent.Ended -> {
                 stopSession(event.stream.dataSessionId, "数据会话结束（${event.reason.label}）")
                 // 手机拆掉数据会话就是不放了：焦点一并放掉（通话中的通话焦点除外），它重新出声时会再要；被新的替换时不放。

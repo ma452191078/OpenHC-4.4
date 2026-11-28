@@ -231,10 +231,22 @@ sealed class AudioEvent {
         override fun toString() = "手机要开声音：$stream，ParaAudio=${stream.parameters}"
     }
 
-    /** 数据端口开好了，SETUP 已发。 */
-    class SetupSent(val stream: AudioStreamInfo, val port: Int, val cseq: Int, val codec: AudioCodec) : AudioEvent() {
+    /** 数据端口开好了，SETUP 已发。原始字节进日志，用来逐字节对比同一台手机成功与失败的 SETUP。 */
+    class SetupSent(
+        val stream: AudioStreamInfo,
+        val port: Int,
+        val cseq: Int,
+        val codec: AudioCodec,
+        message: ByteArray,
+    ) : AudioEvent() {
+        private val messageBytes = message.copyOf()
+
+        /** 发出的 SETUP 原始字节（线上报文）。 */
+        val message: ByteArray get() = messageBytes.copyOf()
+
         override fun toString() =
-            "已发 SETUP（CSeq $cseq，${stream.transport.label}，Codec=${codec.wire}，client_port=$port--1），等手机应答和连入"
+            "已发 SETUP（CSeq $cseq，${stream.transport.label}，Codec=${codec.wire}，client_port=$port--1），" +
+                "等手机应答和连入；原始 ${messageBytes.size} 字节=${messageBytes.toHex()}"
     }
 
     /** 开不了端口，没有发 SETUP。 */
@@ -255,6 +267,15 @@ sealed class AudioEvent {
 
         override fun toString() = "手机应答 SETUP（${afterMillis}ms 后）：$statusLine；头部 " +
             headers.joinToString("；") { (name, value) -> "$name: ${value.take(MAX_VALUE_CHARS)}" }
+    }
+
+    /**
+     * 数据会话结束时手机又一次没有应答 SETUP（[consecutive] 是连续第几次；只要有一次应答过或没发过 SETUP 就从 0 重数）。
+     * 手机侧建发送端失败的已知表现就是这样反复循环（见 [AudioTransport.UDP] 的注记），连续多次时上层可判定音频通道已坏、
+     * 结束连接重连（重连后多半恢复）。
+     */
+    class SetupUnanswered(val stream: AudioStreamInfo, val consecutive: Int) : AudioEvent() {
+        override fun toString() = "手机没有应答 SETUP（连续第 $consecutive 次），音频通道多半已坏"
     }
 
     /** 手机连上了车机开的数据端口。 */
